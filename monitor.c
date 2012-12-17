@@ -2771,6 +2771,13 @@ static mon_cmd_t info_cmds[] = {
         .mhandler.cmd = hmp_info_tpm,
     },
     {
+        .name       = "dimm",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show active and non active dimms",
+        .mhandler.cmd = hmp_info_dimm,
+    },
+    {
         .name       = NULL,
     },
 };
