@@ -23,6 +23,9 @@
 
 #include "hw/acpi/acpi.h"
 
+#define ICH9_MEM_BASE    0xaf80
+#define ICH9_MEM_HOTPLUG_STATUS 8
+
 typedef struct ICH9LPCPMRegs {
     /*
      * In ich9 spec says that pm1_cnt register is 32bit width and
@@ -34,12 +37,14 @@ typedef struct ICH9LPCPMRegs {
     MemoryRegion io;
     MemoryRegion io_gpe;
     MemoryRegion io_smi;
+    MemoryRegion io_memhp;
 
     uint32_t smi_en;
     uint32_t smi_sts;
 
     qemu_irq irq;      /* SCI */
 
+    struct gpe_regs gperegs;
     uint32_t pm_io_base;
     Notifier powerdown_notifier;
 } ICH9LPCPMRegs;

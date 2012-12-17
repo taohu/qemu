@@ -49,11 +49,14 @@ static void pm_update_sci(ICH9LPCPMRegs *pm)
 
     pm1a_sts = acpi_pm1_evt_get_sts(&pm->acpi_regs);
 
-    sci_level = (((pm1a_sts & pm->acpi_regs.pm1.evt.en) &
+    sci_level = ((((pm1a_sts & pm->acpi_regs.pm1.evt.en) &
                   (ACPI_BITMASK_RT_CLOCK_ENABLE |
                    ACPI_BITMASK_POWER_BUTTON_ENABLE |
                    ACPI_BITMASK_GLOBAL_LOCK_ENABLE |
-                   ACPI_BITMASK_TIMER_ENABLE)) != 0);
+                   ACPI_BITMASK_TIMER_ENABLE)) != 0) ||
+        (((pm->acpi_regs.gpe.sts[0] & pm->acpi_regs.gpe.en[0]) &
+          (ICH9_MEM_HOTPLUG_STATUS)) != 0));
+
     qemu_set_irq(pm->irq, sci_level);
 
     /* schedule a timer interruption if needed */
@@ -88,6 +91,29 @@ static const MemoryRegionOps ich9_gpe_ops = {
     .valid.max_access_size = 4,
     .impl.min_access_size = 1,
     .impl.max_access_size = 1,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
+
+static uint32_t memhp_readb(void *opaque, uint32_t addr)
+{
+    ICH9LPCPMRegs *s = opaque;
+    uint32_t val = 0;
+    struct gpe_regs *g = &s->gperegs;
+    if (addr < DIMM_BITMAP_BYTES) {
+        val = (uint32_t) g->mems_sts[addr];
+    }
+    ICH9_DEBUG("memhp read %x == %x\n", addr, val);
+    return val;
+}
+
+static const MemoryRegionOps ich9_memhp_ops = {
+    .old_portio = (MemoryRegionPortio[]) {
+        {
+            .offset = 0,   .len = DIMM_BITMAP_BYTES, .size = 1,
+            .read = memhp_readb,
+        },
+        PORTIO_END_OF_LIST()
+    },
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
@@ -202,9 +228,31 @@ static void pm_powerdown_req(Notifier *n, void *opaque)
     acpi_pm1_evt_power_down(&pm->acpi_regs);
 }
 
+static void enable_mem_device(ICH9LPCState *s, int memdevice)
+{
+    struct gpe_regs *g = &s->pm.gperegs;
+    s->pm.acpi_regs.gpe.sts[0] |= ICH9_MEM_HOTPLUG_STATUS;
+    g->mems_sts[memdevice/8] |= (1 << (memdevice%8));
+}
+
+static int ich9_dimm_hotplug(DeviceState *qdev, DimmDevice *dev, int
+        add)
+{
+    PCIDevice *pci_dev = DO_UPCAST(PCIDevice, qdev, qdev);
+    ICH9LPCState *s = DO_UPCAST(ICH9LPCState, d, pci_dev);
+    DimmDevice *slot = DIMM(dev);
+
+    if (add) {
+        enable_mem_device(s, slot->idx);
+    }
+    pm_update_sci(&s->pm);
+    return 0;
+}
+
 void ich9_pm_init(PCIDevice *lpc_pci, ICH9LPCPMRegs *pm,
                   qemu_irq sci_irq)
 {
+    DeviceState *dev = DEVICE(lpc_pci);
     memory_region_init(&pm->io, "ich9-pm", ICH9_PMIO_SIZE);
     memory_region_set_enabled(&pm->io, false);
     memory_region_add_subregion(pci_address_space_io(lpc_pci),
@@ -222,6 +270,12 @@ void ich9_pm_init(PCIDevice *lpc_pci, ICH9LPCPMRegs *pm,
     memory_region_init_io(&pm->io_smi, &ich9_smi_ops, pm, "apci-smi",
                           8);
     memory_region_add_subregion(&pm->io, ICH9_PMIO_SMI_EN, &pm->io_smi);
+
+    memory_region_init_io(&pm->io_memhp, &ich9_memhp_ops, pm, "apci-memhp0",
+                          DIMM_BITMAP_BYTES);
+    memory_region_add_subregion(get_system_io(), ICH9_MEM_BASE, &pm->io_memhp);
+
+    dimm_bus_hotplug(ich9_dimm_hotplug, dev);
 
     pm->irq = sci_irq;
     qemu_register_reset(pm_reset, pm);
