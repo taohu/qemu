@@ -2729,6 +2729,13 @@ static mon_cmd_t info_cmds[] = {
         .mhandler.cmd = hmp_info_balloon,
     },
     {
+        .name       = "memory-total",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show total memory size",
+        .mhandler.cmd = hmp_info_memory_total,
+    },
+    {
         .name       = "qtree",
         .args_type  = "",
         .params     = "",
