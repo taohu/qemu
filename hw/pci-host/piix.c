@@ -33,6 +33,7 @@
 #include "hw/pci-host/pam.h"
 #include "sysemu/sysemu.h"
 #include "hw/i386/dimm.h"
+#include "hw/nvram/fw_cfg.h"
 
 /*
  * I440FX chipset data sheet.
@@ -284,6 +285,8 @@ static PCIBus *i440fx_common_init(const char *device_name,
     PCIHostState *s;
     PIIX3State *piix3;
     PCII440FXState *f;
+    uint64_t *pci_window_fw_cfg;
+    void *fw_cfg;
     unsigned i;
 
     dev = qdev_create(NULL, "i440FX-pcihost");
@@ -328,6 +331,17 @@ static PCIBus *i440fx_common_init(const char *device_name,
         init_pam(f->ram_memory, f->system_memory, f->pci_address_space,
                  &f->pam_regions[i+1], PAM_EXPAN_BASE + i * PAM_EXPAN_SIZE,
                  PAM_EXPAN_SIZE);
+    }
+
+
+    fw_cfg = object_resolve_path("/machine/fw_cfg", NULL);
+    if (fw_cfg) {
+        pci_window_fw_cfg = g_malloc0(2 * 8);
+        pci_window_fw_cfg[0] = cpu_to_le64((*pi440fx_state)->below_4g_mem_size);
+        pci_window_fw_cfg[1] = cpu_to_le64(0x100000000ULL +
+                                           (*pi440fx_state)->above_4g_mem_size);
+        fw_cfg_add_bytes(fw_cfg, FW_CFG_PCI_WINDOW,
+                         (uint8_t *)pci_window_fw_cfg, 2 * 8);
     }
 
     /* Xen supports additional interrupt routes from the PCI devices to

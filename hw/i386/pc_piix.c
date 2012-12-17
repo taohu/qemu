@@ -49,6 +49,7 @@
 #ifdef CONFIG_XEN
 #  include <xen/hvm/hvm_info_table.h>
 #endif
+#include "hw/nvram/fw_cfg.h"
 
 #define MAX_IDE_BUS 2
 
