@@ -32,6 +32,7 @@
 #include "hw/xen/xen.h"
 #include "hw/pci-host/pam.h"
 #include "sysemu/sysemu.h"
+#include "hw/i386/dimm.h"
 
 /*
  * I440FX chipset data sheet.
@@ -82,6 +83,12 @@ typedef struct PIIX3State {
     MemoryRegion rcr_mem;
 } PIIX3State;
 
+#define I440FX_PCI_HOLE_START 0xe0000000
+
+#define TYPE_I440FX_HOST_DEVICE "i440FX-pcihost"
+#define I440FX_HOST_DEVICE(obj) \
+    OBJECT_CHECK(I440FXState, (obj), TYPE_I440FX_HOST_DEVICE)
+
 #define TYPE_I440FX_PCI_DEVICE "i440FX"
 #define I440FX_PCI_DEVICE(obj) \
     OBJECT_CHECK(PCII440FXState, (obj), TYPE_I440FX_PCI_DEVICE)
@@ -96,6 +103,14 @@ struct PCII440FXState {
     PAMMemoryRegion pam_regions[13];
     MemoryRegion smram_region;
     uint8_t smm_enabled;
+
+    ram_addr_t below_4g_mem_size;
+    ram_addr_t above_4g_mem_size;
+
+    /* i440fx allows for 1 DRAM channels x 8 DRAM ranks */
+    DimmBus *dram_channel0;
+    /* paravirtual memory bus */
+    DimmBus *pv_dram_channel;
 };
 
 
@@ -197,6 +212,25 @@ static const VMStateDescription vmstate_i440fx = {
     }
 };
 
+static hwaddr i440fx_pmc_dimm_offset(DeviceState *dev, uint64_t size)
+{
+    PCII440FXState *d = I440FX_PCI_DEVICE(dev);
+    hwaddr ret;
+
+    /* if dimm fits before pci hole, append it normally */
+    if (d->below_4g_mem_size + size <= I440FX_PCI_HOLE_START) {
+        ret = d->below_4g_mem_size;
+        d->below_4g_mem_size += size;
+    }
+    /* otherwise place it above 4GB */
+    else {
+        ret = 0x100000000LL + d->above_4g_mem_size;
+        d->above_4g_mem_size += size;
+    }
+
+    return ret;
+}
+
 static int i440fx_pcihost_initfn(SysBusDevice *dev)
 {
     PCIHostState *s = PCI_HOST_BRIDGE(dev);
@@ -210,6 +244,12 @@ static int i440fx_pcihost_initfn(SysBusDevice *dev)
                           "pci-conf-data", 4);
     sysbus_add_io(dev, 0xcfc, &s->data_mem);
     sysbus_init_ioports(&s->busdev, 0xcfc, 4);
+
+#if 0
+    s->parent_obj.bus = b;
+    qdev_set_parent_bus(DEVICE(&s->mch), BUS(b));
+    qdev_init_nofail(DEVICE(&s->mch));
+#endif
 
     return 0;
 }
@@ -260,6 +300,13 @@ static PCIBus *i440fx_common_init(const char *device_name,
     f->system_memory = address_space_mem;
     f->pci_address_space = pci_address_space;
     f->ram_memory = ram_memory;
+
+    /* Initialize i440fx's DRAM channel, it can hold up to 8 DRAM ranks */
+    f->dram_channel0 = dimm_bus_create(OBJECT(f), "membus.0", 8,
+            i440fx_pmc_dimm_offset);
+    /* Initialize paravirtual memory bus */
+    f->pv_dram_channel = dimm_bus_create(OBJECT(f), "membus.pv", 0,
+            i440fx_pmc_dimm_offset);
     memory_region_init_alias(&f->pci_hole, "pci-hole", f->pci_address_space,
                              pci_hole_start, pci_hole_size);
     memory_region_add_subregion(f->system_memory, pci_hole_start, &f->pci_hole);
