@@ -677,6 +677,23 @@ void hmp_info_dimm(Monitor *mon, const QDict *qdict)
     qapi_free_DimmInfoList(info);
 }
 
+void hmp_info_memory_hotplug(Monitor *mon, const QDict *qdict)
+{
+    MemHpInfoList *info;
+    MemHpInfoList *item;
+    MemHpInfo *dimm;
+
+    info = qmp_query_memory_hotplug(NULL);
+    for (item = info; item; item = item->next) {
+        dimm = item->value;
+        monitor_printf(mon, "dimm: %s %s %s\n", dimm->dimm,
+                dimm->request, dimm->result);
+        dimm->dimm = NULL;
+    }
+
+    qapi_free_MemHpInfoList(info);
+}
+
 void hmp_quit(Monitor *mon, const QDict *qdict)
 {
     monitor_suspend(mon);
