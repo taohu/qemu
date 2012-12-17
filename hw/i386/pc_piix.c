@@ -146,6 +146,7 @@ static void pc_init1(MemoryRegion *system_memory,
                                ? 0
                                : ((uint64_t)1 << 62)),
                               pci_memory, ram_memory);
+        bochs_meminfo_bios_init(fw_cfg);
     } else {
         pci_bus = NULL;
         i440fx_state = NULL;

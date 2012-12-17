@@ -182,6 +182,7 @@ int pvpanic_init(ISABus *bus);
 #define E820_UNUSABLE   5
 
 int e820_add_entry(uint64_t, uint64_t, uint32_t);
+void bochs_meminfo_bios_init(void *fw_cfg);
 
 #define PC_COMPAT_1_4 \
         {\
