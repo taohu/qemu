@@ -170,7 +170,7 @@ int main(int argc, char **argv)
 
 #include "ui/qemu-spice.h"
 #include "qapi/string-input-visitor.h"
-#include "hw/dimm.h"
+#include "hw/i386/dimm.h"
 
 //#define DEBUG_NET
 //#define DEBUG_SLIRP

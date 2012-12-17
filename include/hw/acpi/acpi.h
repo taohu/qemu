@@ -126,6 +126,11 @@ struct ACPIREGS {
     Notifier wakeup;
 };
 
+#include "hw/i386/dimm.h"
+struct gpe_regs {
+    uint8_t mems_sts[DIMM_BITMAP_BYTES];
+};
+
 /* PM_TMR */
 void acpi_pm_tmr_update(ACPIREGS *ar, bool enable);
 void acpi_pm_tmr_calc_overflow_time(ACPIREGS *ar);
