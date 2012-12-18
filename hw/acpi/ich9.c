@@ -106,11 +106,28 @@ static uint32_t memhp_readb(void *opaque, uint32_t addr)
     return val;
 }
 
+static void memhp_writeb(void *opaque, uint32_t addr, uint32_t val)
+{
+    switch (addr) {
+    case ICH9_MEM_EJ_BASE - ICH9_MEM_BASE:
+        dimm_notify(val, DIMM_REMOVE_SUCCESS);
+        break;
+    default:
+        ICH9_DEBUG("memhp write invalid %x <== %d\n", addr, val);
+    }
+    ICH9_DEBUG("memhp write %x <== %d\n", addr, val);
+}
+
 static const MemoryRegionOps ich9_memhp_ops = {
     .old_portio = (MemoryRegionPortio[]) {
         {
             .offset = 0,   .len = DIMM_BITMAP_BYTES, .size = 1,
             .read = memhp_readb,
+        },
+        {
+            .offset = ICH9_MEM_EJ_BASE - ICH9_MEM_BASE,
+            .len = 1, .size = 1,
+            .write = memhp_writeb,
         },
         PORTIO_END_OF_LIST()
     },
@@ -235,6 +252,13 @@ static void enable_mem_device(ICH9LPCState *s, int memdevice)
     g->mems_sts[memdevice/8] |= (1 << (memdevice%8));
 }
 
+static void disable_mem_device(ICH9LPCState *s, int memdevice)
+{
+    struct gpe_regs *g = &s->pm.gperegs;
+    s->pm.acpi_regs.gpe.sts[0] |= ICH9_MEM_HOTPLUG_STATUS;
+    g->mems_sts[memdevice/8] &= ~(1 << (memdevice%8));
+}
+
 static int ich9_dimm_hotplug(DeviceState *qdev, DimmDevice *dev, int
         add)
 {
@@ -244,6 +268,8 @@ static int ich9_dimm_hotplug(DeviceState *qdev, DimmDevice *dev, int
 
     if (add) {
         enable_mem_device(s, slot->idx);
+    } else {
+        disable_mem_device(s, slot->idx);
     }
     pm_update_sci(&s->pm);
     return 0;
@@ -272,7 +298,7 @@ void ich9_pm_init(PCIDevice *lpc_pci, ICH9LPCPMRegs *pm,
     memory_region_add_subregion(&pm->io, ICH9_PMIO_SMI_EN, &pm->io_smi);
 
     memory_region_init_io(&pm->io_memhp, &ich9_memhp_ops, pm, "apci-memhp0",
-                          DIMM_BITMAP_BYTES);
+                          DIMM_BITMAP_BYTES + 1);
     memory_region_add_subregion(get_system_io(), ICH9_MEM_BASE, &pm->io_memhp);
 
     dimm_bus_hotplug(ich9_dimm_hotplug, dev);
