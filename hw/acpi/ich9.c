@@ -33,6 +33,7 @@
 #include "exec/address-spaces.h"
 
 #include "hw/i386/ich9.h"
+#include "hw/mem-hotplug/dimm.h"
 
 //#define DEBUG
 
@@ -49,11 +50,14 @@ static void pm_update_sci(ICH9LPCPMRegs *pm)
 
     pm1a_sts = acpi_pm1_evt_get_sts(&pm->acpi_regs);
 
-    sci_level = (((pm1a_sts & pm->acpi_regs.pm1.evt.en) &
+    sci_level = ((((pm1a_sts & pm->acpi_regs.pm1.evt.en) &
                   (ACPI_BITMASK_RT_CLOCK_ENABLE |
                    ACPI_BITMASK_POWER_BUTTON_ENABLE |
                    ACPI_BITMASK_GLOBAL_LOCK_ENABLE |
-                   ACPI_BITMASK_TIMER_ENABLE)) != 0);
+                   ACPI_BITMASK_TIMER_ENABLE)) != 0) ||
+        (((pm->acpi_regs.gpe.sts[0] & pm->acpi_regs.gpe.en[0]) &
+          (ICH9_MEM_HOTPLUG_STATUS)) != 0));
+
     qemu_set_irq(pm->irq, sci_level);
 
     /* schedule a timer interruption if needed */
@@ -202,6 +206,45 @@ static void pm_powerdown_req(Notifier *n, void *opaque)
     acpi_pm1_evt_power_down(&pm->acpi_regs);
 }
 
+static uint64_t mem_status_read(void *opaque, hwaddr addr, unsigned int size)
+{
+    ICH9LPCPMRegs *s = opaque;
+    uint64_t val = 0;
+    MemStatus *g = &s->gpe_mem;
+    if (addr < ICH9_MEM_LEN) {
+        val = g->mems_sts[addr];
+    }
+    ICH9_DEBUG("memhp read %" HWADDR_PRIx " == %" PRIu64 "\n", addr, val);
+    return val;
+}
+
+static const MemoryRegionOps ich9_mem_hotplug_ops = {
+    .read = mem_status_read,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .valid = {
+        .min_access_size = 1,
+        .max_access_size = 1,
+    },
+};
+
+static void enable_mem_device(ICH9LPCState *s, int memdevice)
+{
+    MemStatus *g = &s->pm.gpe_mem;
+    s->pm.acpi_regs.gpe.sts[0] |= ICH9_MEM_HOTPLUG_STATUS;
+    g->mems_sts[memdevice / 8] |= (1 << (memdevice % 8));
+}
+
+static int ich9_mem_hotplug(DeviceState *dev, DimmDevice *dimm, int add)
+{
+    ICH9LPCState *s = ICH9_LPC_DEVICE(dev);
+
+    if (add) {
+        enable_mem_device(s, dimm->idx);
+    }
+    pm_update_sci(&s->pm);
+    return 0;
+}
+
 void ich9_pm_init(PCIDevice *lpc_pci, ICH9LPCPMRegs *pm,
                   qemu_irq sci_irq)
 {
@@ -227,4 +270,11 @@ void ich9_pm_init(PCIDevice *lpc_pci, ICH9LPCPMRegs *pm,
     qemu_register_reset(pm_reset, pm);
     pm->powerdown_notifier.notify = pm_powerdown_req;
     qemu_register_powerdown_notifier(&pm->powerdown_notifier);
+
+    memory_region_init_io(&pm->io_mem, NULL, &ich9_mem_hotplug_ops, pm,
+                          "acpi-memory-hotplug0", ICH9_MEM_BASE);
+    memory_region_add_subregion(get_system_io(), ICH9_MEM_BASE, &pm->io_mem);
+
+    dimm_bus_hotplug(ich9_mem_hotplug, &lpc_pci->qdev);
+
 }
