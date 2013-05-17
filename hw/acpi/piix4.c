@@ -29,6 +29,7 @@
 #include "exec/ioport.h"
 #include "hw/nvram/fw_cfg.h"
 #include "exec/address-spaces.h"
+#include "hw/mem-hotplug/dimm.h"
 
 //#define DEBUG
 
@@ -50,9 +51,12 @@
 
 #define PIIX4_PROC_BASE 0xaf00
 #define PIIX4_PROC_LEN 32
+#define PIIX4_MEM_BASE 0xaf80
+#define PIIX4_MEM_LEN 32
 
 #define PIIX4_PCI_HOTPLUG_STATUS 2
 #define PIIX4_CPU_HOTPLUG_STATUS 4
+#define PIIX4_MEM_HOTPLUG_STATUS 8
 
 struct pci_status {
     uint32_t up; /* deprecated, maintained for migration compatibility */
@@ -63,6 +67,10 @@ typedef struct CPUStatus {
     uint8_t sts[PIIX4_PROC_LEN];
 } CPUStatus;
 
+typedef struct MemStatus {
+    uint8_t mems_sts[PIIX4_MEM_LEN];
+} MemStatus;
+
 typedef struct PIIX4PMState {
     PCIDevice dev;
 
@@ -70,6 +78,7 @@ typedef struct PIIX4PMState {
     MemoryRegion io_gpe;
     MemoryRegion io_pci;
     MemoryRegion io_cpu;
+    MemoryRegion io_mem;
     ACPIREGS ar;
 
     APMState apm;
@@ -94,6 +103,8 @@ typedef struct PIIX4PMState {
 
     CPUStatus gpe_cpu;
     Notifier cpu_added_notifier;
+
+    MemStatus  gpe_mem;
 } PIIX4PMState;
 
 static void piix4_acpi_system_hot_add_init(MemoryRegion *parent,
@@ -113,7 +124,8 @@ static void pm_update_sci(PIIX4PMState *s)
                    ACPI_BITMASK_GLOBAL_LOCK_ENABLE |
                    ACPI_BITMASK_TIMER_ENABLE)) != 0) ||
         (((s->ar.gpe.sts[0] & s->ar.gpe.en[0]) &
-          (PIIX4_PCI_HOTPLUG_STATUS | PIIX4_CPU_HOTPLUG_STATUS)) != 0);
+          (PIIX4_PCI_HOTPLUG_STATUS | PIIX4_CPU_HOTPLUG_STATUS |
+           PIIX4_MEM_HOTPLUG_STATUS)) != 0);
 
     qemu_set_irq(s->irq, sci_level);
     /* schedule a timer interruption if needed */
@@ -665,8 +677,38 @@ static void piix4_init_cpu_status(CPUState *cpu, void *data)
     g->sts[id / 8] |= (1 << (id % 8));
 }
 
+static uint64_t mem_status_read(void *opaque, hwaddr addr, unsigned int size)
+{
+    PIIX4PMState *s = opaque;
+    uint64_t val = 0;
+    MemStatus *g = &s->gpe_mem;
+    if (addr < PIIX4_MEM_LEN) {
+        val = g->mems_sts[addr];
+    }
+    PIIX4_DPRINTF("memhp read %" HWADDR_PRIx " == %" PRIu64 "\n", addr, val);
+    return val;
+}
+
+static const MemoryRegionOps mem_hotplug_ops = {
+    .read = mem_status_read,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .valid = {
+        .min_access_size = 1,
+        .max_access_size = 1,
+    },
+};
+
+static void piix4_init_mem_status(PIIX4PMState *s)
+{
+    int i;
+    for (i = 0; i < PIIX4_MEM_LEN; i++) {
+        s->gpe_mem.mems_sts[i] = 0;
+    }
+}
+
 static int piix4_device_hotplug(DeviceState *qdev, PCIDevice *dev,
                                 PCIHotplugState state);
+static int piix4_mem_hotplug(DeviceState *qdev, DimmDevice *dev, int add);
 
 static void piix4_acpi_system_hot_add_init(MemoryRegion *parent,
                                            PCIBus *bus, PIIX4PMState *s)
@@ -687,6 +729,13 @@ static void piix4_acpi_system_hot_add_init(MemoryRegion *parent,
     memory_region_add_subregion(parent, PIIX4_PROC_BASE, &s->io_cpu);
     s->cpu_added_notifier.notify = piix4_cpu_added_req;
     qemu_register_cpu_added_notifier(&s->cpu_added_notifier);
+
+    piix4_init_mem_status(s);
+    memory_region_init_io(&s->io_mem, NULL, &mem_hotplug_ops, s, "apci-mem-hotplug",
+                          PIIX4_MEM_LEN);
+    memory_region_add_subregion(parent, PIIX4_MEM_BASE, &s->io_mem);
+
+    dimm_bus_hotplug(piix4_mem_hotplug, &s->dev.qdev);
 }
 
 static void enable_device(PIIX4PMState *s, int slot)
@@ -724,5 +773,24 @@ static int piix4_device_hotplug(DeviceState *qdev, PCIDevice *dev,
 
     pm_update_sci(s);
 
+    return 0;
+}
+
+static void enable_mem_device(PIIX4PMState *s, int memdevice)
+{
+    MemStatus *g = &s->gpe_mem;
+    s->ar.gpe.sts[0] |= PIIX4_MEM_HOTPLUG_STATUS;
+    g->mems_sts[memdevice / 8] |= (1 << (memdevice % 8));
+}
+
+static int piix4_mem_hotplug(DeviceState *dev, DimmDevice *dimm, int add)
+{
+    PCIDevice *pci_dev = DO_UPCAST(PCIDevice, qdev, dev);
+    PIIX4PMState *s = DO_UPCAST(PIIX4PMState, dev, pci_dev);
+
+    if (add) {
+        enable_mem_device(s, dimm->idx);
+    }
+    pm_update_sci(s);
     return 0;
 }
