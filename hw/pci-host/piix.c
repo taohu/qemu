@@ -38,16 +38,6 @@
  * http://download.intel.com/design/chipsets/datashts/29054901.pdf
  */
 
-#define TYPE_I440FX_DEVICE "i440FX"
-#define I440FX_DEVICE(obj) \
-    OBJECT_CHECK(I440FXState, (obj), TYPE_I440FX_DEVICE)
-
-typedef struct I440FXState {
-    PCIHostState parent_obj;
-    MemoryRegion *address_space_io;
-    MemoryRegion *pci_address_space;
-} I440FXState;
-
 #define PIIX_NUM_PIC_IRQS       16      /* i8259 * 2 */
 #define PIIX_NUM_PIRQS          4ULL    /* PIRQ[A-D] */
 #define XEN_PIIX_NUM_PIRQS      128ULL
@@ -79,6 +69,8 @@ typedef struct PIIX3State {
 #endif
     uint64_t pic_levels;
 
+    ISABus *bus;
+
     qemu_irq *pic;
 
     /* This member isn't used. Just for save/load compatibility */
@@ -107,6 +99,17 @@ struct I440FXPMCState {
     uint8_t smm_enabled;
 };
 
+#define TYPE_I440FX_DEVICE "i440FX"
+#define I440FX_DEVICE(obj) \
+    OBJECT_CHECK(I440FXState, (obj), TYPE_I440FX_DEVICE)
+
+typedef struct I440FXState {
+    PCIHostState parent_obj;
+    MemoryRegion *address_space_io;
+    MemoryRegion *pci_address_space;
+
+    PIIX3State piix3;
+} I440FXState;
 
 #define I440FX_PAM      0x59
 #define I440FX_PAM_SIZE 7
@@ -224,11 +227,37 @@ static int i440fx_realize(SysBusDevice *dev)
     sysbus_add_io(dev, 0xcfc, &s->data_mem);
     sysbus_init_ioports(&s->busdev, 0xcfc, 4);
 
+    qdev_set_parent_bus(DEVICE(&f->piix3), BUS(s->bus));
+    qdev_init_nofail(DEVICE(&f->piix3));
+
+    if (xen_enabled()) {
+        pci_bus_irqs(s->bus, xen_piix3_set_irq, xen_pci_slot_get_pirq,
+                     &f->piix3, XEN_PIIX_NUM_PIRQS);
+    } else {
+        pci_bus_irqs(s->bus, piix3_set_irq, pci_slot_get_pirq, &f->piix3,
+                     PIIX_NUM_PIRQS);
+        pci_bus_set_route_irq_fn(s->bus, piix3_route_intx_pin_to_irq);
+    }
+
     return 0;
 }
 
 static void i440fx_initfn(Object *obj)
 {
+    I440FXState *f = I440FX_DEVICE(obj);
+
+    /* Xen supports additional interrupt routes from the PCI devices to
+     * the IOAPIC: the four pins of each PCI device on the bus are also
+     * connected to the IOAPIC directly.
+     * These additional routes can be discovered through ACPI. */
+    if (xen_enabled()) {
+        object_initialize(&f->piix3, "PIIX3-xen");
+    } else {
+        object_initialize(&f->piix3, "PIIX3");
+    }
+    qdev_prop_set_uint32(DEVICE(&f->piix3), "addr", PCI_DEVFN(1, 0));
+    qdev_prop_set_bit(DEVICE(&f->piix3), "multifunction", true);
+    object_property_add_child(OBJECT(f), "piix3", OBJECT(&f->piix3), NULL);
 }
 
 static int i440fx_pmc_initfn(PCIDevice *dev)
@@ -267,6 +296,9 @@ static PCIBus *i440fx_common_init(const char *device_name,
     i440fx->address_space_io = address_space_io;
     i440fx->pci_address_space = pci_address_space;
 
+    piix3 = &i440fx->piix3;
+    piix3->pic = pic;
+
     object_property_add_child(qdev_get_machine(), "i440fx",
                               OBJECT(i440fx), NULL);
     qdev_set_parent_bus(DEVICE(i440fx), sysbus_get_default());
@@ -300,25 +332,7 @@ static PCIBus *i440fx_common_init(const char *device_name,
                  PAM_EXPAN_SIZE);
     }
 
-    /* Xen supports additional interrupt routes from the PCI devices to
-     * the IOAPIC: the four pins of each PCI device on the bus are also
-     * connected to the IOAPIC directly.
-     * These additional routes can be discovered through ACPI. */
-    if (xen_enabled()) {
-        piix3 = DO_UPCAST(PIIX3State, dev,
-                pci_create_simple_multifunction(s->bus, -1, true, "PIIX3-xen"));
-        pci_bus_irqs(s->bus, xen_piix3_set_irq, xen_pci_slot_get_pirq,
-                piix3, XEN_PIIX_NUM_PIRQS);
-    } else {
-        piix3 = DO_UPCAST(PIIX3State, dev,
-                pci_create_simple_multifunction(s->bus, -1, true, "PIIX3"));
-        pci_bus_irqs(s->bus, piix3_set_irq, pci_slot_get_pirq, piix3,
-                PIIX_NUM_PIRQS);
-        pci_bus_set_route_irq_fn(s->bus, piix3_route_intx_pin_to_irq);
-    }
-    piix3->pic = pic;
-    *isa_bus = ISA_BUS(qdev_get_child_bus(DEVICE(piix3), "isa.0"));
-
+    *isa_bus = piix3->bus;
     *piix3_devfn = piix3->dev.devfn;
 
     ram_size = ram_size / 8 / 1024 / 1024;
@@ -564,7 +578,7 @@ static int piix3_realize(PCIDevice *dev)
 {
     PIIX3State *s = PIIX3(dev);
 
-    isa_bus_new(DEVICE(s), pci_address_space_io(dev));
+    s->bus = isa_bus_new(DEVICE(s), pci_address_space_io(dev));
 
     memory_region_init_io(&s->rcr_mem, &rcr_ops, s, "piix3-reset-control", 1);
     memory_region_add_subregion_overlap(pci_address_space_io(dev), RCR_IOPORT,
