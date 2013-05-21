@@ -524,7 +524,7 @@ static const MemoryRegionOps ich9_rst_cnt_ops = {
     .endianness = DEVICE_LITTLE_ENDIAN
 };
 
-static int ich9_lpc_initfn(PCIDevice *d)
+static int ich9_lpc_realize(PCIDevice *d)
 {
     ICH9LPCState *lpc = ICH9_LPC_DEVICE(d);
     ISABus *isa_bus;
@@ -594,13 +594,17 @@ static const VMStateDescription vmstate_ich9_lpc = {
     }
 };
 
+static void ich9_lpc_initfn(Object *obj)
+{
+}
+
 static void ich9_lpc_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
     PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
 
     dc->reset = ich9_lpc_reset;
-    k->init = ich9_lpc_initfn;
+    k->init = ich9_lpc_realize;
     dc->vmsd = &vmstate_ich9_lpc;
     dc->no_user = 1;
     k->config_write = ich9_lpc_config_write;
@@ -616,6 +620,7 @@ static const TypeInfo ich9_lpc_info = {
     .name       = TYPE_ICH9_LPC_DEVICE,
     .parent     = TYPE_PCI_DEVICE,
     .instance_size = sizeof(struct ICH9LPCState),
+    .instance_init = ich9_lpc_initfn,
     .class_init  = ich9_lpc_class_init,
 };
 
