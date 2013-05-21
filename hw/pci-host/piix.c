@@ -77,6 +77,7 @@ typedef struct PIIX3State {
     DeviceState *hpet;
     ISADevice *rtc;
     ISADevice *pit;
+    ISADevice *pcspk;
 
     qemu_irq *pic;
 
@@ -630,8 +631,9 @@ static int piix3_realize(PCIDevice *dev)
                               qdev_get_gpio_in(DEVICE(s->pit), 0));
     }
 
-    /* FIXME this should be refactored */
-    pcspk_init(s->bus, s->pit);
+    /* Realize pcspk */
+    qdev_set_parent_bus(DEVICE(s->pcspk), BUS(s->bus));
+    qdev_init_nofail(DEVICE(s->pcspk));
 
     memory_region_init_io(&s->rcr_mem, &rcr_ops, s, "piix3-reset-control", 1);
     memory_region_add_subregion_overlap(pci_address_space_io(dev), RCR_IOPORT,
@@ -666,6 +668,10 @@ static void piix3_initfn(Object *obj)
     }
     object_property_add_child(obj, "pit", OBJECT(s->pit), NULL);
     qdev_prop_set_uint32(DEVICE(s->pit), "iobase", 0x40);
+
+    s->pcspk = ISA_DEVICE(object_new(TYPE_PC_SPEAKER));
+    qdev_prop_set_uint32(&s->pcspk->qdev, "iobase", 0x61);
+    qdev_prop_set_ptr(&s->pcspk->qdev, "pit", s->pit);
 }
 
 static void piix3_class_init(ObjectClass *klass, void *data)

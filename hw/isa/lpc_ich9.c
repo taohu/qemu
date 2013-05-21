@@ -597,8 +597,9 @@ static int ich9_lpc_realize(PCIDevice *d)
                               qdev_get_gpio_in(DEVICE(lpc->pit), 0));
     }
 
-    /* FIXME this should be refactored */
-    pcspk_init(lpc->isa_bus, lpc->pit);
+    /* Realize pcspk */
+    qdev_set_parent_bus(DEVICE(lpc->pcspk), BUS(lpc->isa_bus));
+    qdev_init_nofail(DEVICE(lpc->pcspk));
 
     return 0;
 }
@@ -669,6 +670,10 @@ static void ich9_lpc_initfn(Object *obj)
     }
     object_property_add_child(obj, "pit", OBJECT(s->pit), NULL);
     qdev_prop_set_uint32(DEVICE(s->pit), "iobase", 0x40);
+
+    s->pcspk = ISA_DEVICE(object_new(TYPE_PC_SPEAKER));
+    qdev_prop_set_uint32(&s->pcspk->qdev, "iobase", 0x61);
+    qdev_prop_set_ptr(&s->pcspk->qdev, "pit", s->pit);
 }
 
 static void ich9_lpc_class_init(ObjectClass *klass, void *data)
