@@ -87,8 +87,7 @@ void *pc_memory_init(MemoryRegion *system_memory,
                     const char *initrd_filename,
                     ram_addr_t below_4g_mem_size,
                     ram_addr_t above_4g_mem_size,
-                    MemoryRegion *rom_memory,
-                    MemoryRegion **ram_memory);
+                    MemoryRegion *rom_memory);
 qemu_irq *pc_allocate_cpu_irq(void);
 DeviceState *pc_vga_init(ISABus *isa_bus, PCIBus *pci_bus);
 void pc_basic_device_init(ISABus *isa_bus, qemu_irq *gsi,
@@ -127,8 +126,7 @@ PCIBus *i440fx_init(int *piix_devfn,
                     MemoryRegion *address_space_mem,
                     MemoryRegion *address_space_io,
                     ram_addr_t ram_size,
-                    MemoryRegion **pci_memory,
-                    MemoryRegion *ram_memory);
+                    MemoryRegion **pci_memory);
 
 /* piix4.c */
 extern PCIDevice *piix4_dev;
