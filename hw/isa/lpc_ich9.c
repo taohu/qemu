@@ -44,6 +44,7 @@
 #include "hw/pci/pci_bus.h"
 #include "exec/address-spaces.h"
 #include "sysemu/sysemu.h"
+#include "hw/timer/hpet.h"
 
 static int ich9_lpc_sci_irq(ICH9LPCState *lpc);
 
@@ -551,6 +552,21 @@ static int ich9_lpc_realize(PCIDevice *d)
                                         ICH9_RST_CNT_IOPORT, &lpc->rst_cnt_mem,
                                         1);
 
+    /* Realize HPET */
+    if (lpc->hpet) {
+        int i;
+
+        /* We need to introduce a proper IRQ and Memory QOM infrastructure
+         * so that the HPET isn't a sysbus device */
+        qdev_set_parent_bus(lpc->hpet, sysbus_get_default());
+        qdev_init_nofail(lpc->hpet);
+
+        sysbus_mmio_map(SYS_BUS_DEVICE(lpc->hpet), 0, HPET_BASE);
+        for (i = 0; i < GSI_NUM_PINS; i++) {
+            sysbus_connect_irq(SYS_BUS_DEVICE(lpc->hpet), i, lpc->pic[i]);
+        }
+    }
+
     return 0;
 }
 
@@ -596,6 +612,18 @@ static const VMStateDescription vmstate_ich9_lpc = {
 
 static void ich9_lpc_initfn(Object *obj)
 {
+    ICH9LPCState *s = ICH9_LPC_DEVICE(obj);
+
+    /*
+     * Check if an HPET shall be created.
+     *
+     * Without KVM_CAP_PIT_STATE2, we cannot switch off the in-kernel PIT
+     * when the HPET wants to take over. Thus we have to disable the latter.
+     */
+    if (!no_hpet && (!kvm_irqchip_in_kernel() || kvm_has_pit_state2())) {
+        s->hpet = DEVICE(object_new(TYPE_HPET));
+        object_property_add_child(obj, "hpet", OBJECT(s->hpet), NULL);
+    }
 }
 
 static void ich9_lpc_class_init(ObjectClass *klass, void *data)

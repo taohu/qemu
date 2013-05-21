@@ -135,12 +135,15 @@ static void pc_q35_init(QEMUMachineInitArgs *args)
     qdev_init_nofail(DEVICE(q35_host));
     host_bus = q35_host->host.pci.bus;
     /* create ISA bus */
-    lpc = pci_create_simple_multifunction(host_bus, PCI_DEVFN(ICH9_LPC_DEV,
-                                          ICH9_LPC_FUNC), true,
-                                          TYPE_ICH9_LPC_DEVICE);
+    lpc = PCI_DEVICE(object_new(TYPE_ICH9_LPC_DEVICE));
     ich9_lpc = ICH9_LPC_DEVICE(lpc);
     ich9_lpc->pic = gsi;
+    qdev_prop_set_int32(DEVICE(ich9_lpc), "addr",
+                        PCI_DEVFN(ICH9_LPC_DEV, ICH9_LPC_FUNC));
+    qdev_prop_set_bit(DEVICE(ich9_lpc), "multifunction", true);
+    qdev_set_parent_bus(DEVICE(ich9_lpc), BUS(host_bus));
     ich9_lpc->ioapic = gsi_state->ioapic_irq;
+    qdev_init_nofail(DEVICE(ich9_lpc));
     pci_bus_irqs(host_bus, ich9_lpc_set_irq, ich9_lpc_map_irq, ich9_lpc,
                  ICH9_LPC_NB_PIRQS);
     pci_bus_set_route_irq_fn(host_bus, ich9_route_intx_pin_to_irq);

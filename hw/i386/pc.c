@@ -1130,8 +1130,6 @@ void pc_basic_device_init(ISABus *isa_bus, qemu_irq *gsi,
     int i;
     DriveInfo *fd[MAX_FD];
     DeviceState *hpet = NULL;
-    int pit_isa_irq = 0;
-    qemu_irq pit_alt_irq = NULL;
     qemu_irq rtc_irq = NULL;
     qemu_irq *a20_line;
     ISADevice *i8042, *port92, *vmmouse, *pit = NULL;
@@ -1145,24 +1143,6 @@ void pc_basic_device_init(ISABus *isa_bus, qemu_irq *gsi,
     memory_region_init_io(ioportF0_io, &ioportF0_io_ops, NULL, "ioportF0", 1);
     memory_region_add_subregion(isa_bus->address_space_io, 0xf0, ioportF0_io);
 
-    /*
-     * Check if an HPET shall be created.
-     *
-     * Without KVM_CAP_PIT_STATE2, we cannot switch off the in-kernel PIT
-     * when the HPET wants to take over. Thus we have to disable the latter.
-     */
-    if (!no_hpet && (!kvm_irqchip_in_kernel() || kvm_has_pit_state2())) {
-        hpet = sysbus_try_create_simple("hpet", HPET_BASE, NULL);
-
-        if (hpet) {
-            for (i = 0; i < GSI_NUM_PINS; i++) {
-                sysbus_connect_irq(SYS_BUS_DEVICE(hpet), i, gsi[i]);
-            }
-            pit_isa_irq = -1;
-            pit_alt_irq = qdev_get_gpio_in(hpet, HPET_LEGACY_PIT_INT);
-            rtc_irq = qdev_get_gpio_in(hpet, HPET_LEGACY_RTC_INT);
-        }
-    }
     *rtc_state = rtc_init(isa_bus, 2000, rtc_irq);
 
     qemu_register_boot_set(pc_boot_set, *rtc_state);
@@ -1171,7 +1151,7 @@ void pc_basic_device_init(ISABus *isa_bus, qemu_irq *gsi,
         if (kvm_irqchip_in_kernel()) {
             pit = kvm_pit_init(isa_bus, 0x40);
         } else {
-            pit = pit_init(isa_bus, 0x40, pit_isa_irq, pit_alt_irq);
+            pit = pit_init(isa_bus, 0x40, 0, NULL);
         }
         if (hpet) {
             /* connect PIT to output control line of the HPET */

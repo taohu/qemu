@@ -62,6 +62,8 @@ typedef struct ICH9LPCState {
     MemoryRegion rbca_mem;
     Notifier machine_ready;
 
+    DeviceState *hpet;
+
     qemu_irq *pic;
     qemu_irq *ioapic;
 } ICH9LPCState;

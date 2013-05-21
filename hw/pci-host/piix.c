@@ -32,6 +32,7 @@
 #include "hw/xen/xen.h"
 #include "hw/pci-host/pam.h"
 #include "sysemu/sysemu.h"
+#include "hw/timer/hpet.h"
 
 /*
  * I440FX chipset data sheet.
@@ -70,6 +71,7 @@ typedef struct PIIX3State {
     uint64_t pic_levels;
 
     ISABus *bus;
+    DeviceState *hpet;
 
     qemu_irq *pic;
 
@@ -580,6 +582,21 @@ static int piix3_realize(PCIDevice *dev)
 
     s->bus = isa_bus_new(DEVICE(s), pci_address_space_io(dev));
 
+    /* Realize HPET */
+    if (s->hpet) {
+        int i;
+
+        /* We need to introduce a proper IRQ and Memory QOM infrastructure
+         * so that the HPET isn't a sysbus device */
+        qdev_set_parent_bus(s->hpet, sysbus_get_default());
+        qdev_init_nofail(s->hpet);
+
+        sysbus_mmio_map(SYS_BUS_DEVICE(s->hpet), 0, HPET_BASE);
+        for (i = 0; i < GSI_NUM_PINS; i++) {
+            sysbus_connect_irq(SYS_BUS_DEVICE(s->hpet), i, s->pic[i]);
+        }
+    }
+
     memory_region_init_io(&s->rcr_mem, &rcr_ops, s, "piix3-reset-control", 1);
     memory_region_add_subregion_overlap(pci_address_space_io(dev), RCR_IOPORT,
                                         &s->rcr_mem, 1);
@@ -589,6 +606,19 @@ static int piix3_realize(PCIDevice *dev)
 
 static void piix3_initfn(Object *obj)
 {
+    PIIX3State *s = PIIX3(obj);
+
+    /*
+     * Check if an HPET shall be created.
+     *
+     * Without KVM_CAP_PIT_STATE2, we cannot switch off the in-kernel PIT
+     * when the HPET wants to take over. Thus we have to disable the latter.
+     */
+    if (!no_hpet && (!kvm_irqchip_in_kernel() || kvm_has_pit_state2())) {
+        s->hpet = DEVICE(object_new(TYPE_HPET));
+        object_property_add_child(obj, "hpet", OBJECT(s->hpet), NULL);
+    }
+
 }
 
 static void piix3_class_init(ObjectClass *klass, void *data)

@@ -278,7 +278,7 @@ static const VMStateDescription vmstate_hpet_timer = {
 };
 
 static const VMStateDescription vmstate_hpet = {
-    .name = "hpet",
+    .name = TYPE_HPET,
     .version_id = 2,
     .minimum_version_id = 1,
     .minimum_version_id_old = 1,
