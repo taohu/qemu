@@ -34,6 +34,8 @@
 #include "sysemu/sysemu.h"
 #include "hw/timer/hpet.h"
 #include "hw/timer/mc146818rtc.h"
+#include "hw/audio/pcspk.h"
+#include "hw/timer/i8254.h"
 
 /*
  * I440FX chipset data sheet.
@@ -74,6 +76,7 @@ typedef struct PIIX3State {
     ISABus *bus;
     DeviceState *hpet;
     ISADevice *rtc;
+    ISADevice *pit;
 
     qemu_irq *pic;
 
@@ -581,6 +584,7 @@ static const MemoryRegionOps rcr_ops = {
 static int piix3_realize(PCIDevice *dev)
 {
     PIIX3State *s = PIIX3(dev);
+    qemu_irq pit_irq = NULL;
     qemu_irq rtc_irq;
 
     s->bus = isa_bus_new(DEVICE(s), pci_address_space_io(dev));
@@ -603,11 +607,31 @@ static int piix3_realize(PCIDevice *dev)
             sysbus_connect_irq(SYS_BUS_DEVICE(s->hpet), i, s->pic[i]);
         }
         rtc_irq = qdev_get_gpio_in(s->hpet, HPET_LEGACY_RTC_INT);
+        pit_irq = qdev_get_gpio_in(s->hpet, HPET_LEGACY_PIT_INT);
     } else {
         isa_init_irq(s->rtc, &rtc_irq, RTC_ISA_IRQ);
     }
 
     rtc_set_irq(s->rtc, rtc_irq);
+
+    /* Realize the PIT */
+    qdev_set_parent_bus(DEVICE(s->pit), BUS(s->bus));
+    qdev_init_nofail(DEVICE(s->pit));
+
+    if (!pit_irq) {
+        pit_irq = isa_get_irq(s->pit, 0);
+    }
+    if (!kvm_irqchip_in_kernel()) {
+        qdev_connect_gpio_out(DEVICE(s->pit), 0, pit_irq);
+    }
+
+    if (s->hpet) {
+        qdev_connect_gpio_out(DEVICE(s->hpet), 0,
+                              qdev_get_gpio_in(DEVICE(s->pit), 0));
+    }
+
+    /* FIXME this should be refactored */
+    pcspk_init(s->bus, s->pit);
 
     memory_region_init_io(&s->rcr_mem, &rcr_ops, s, "piix3-reset-control", 1);
     memory_region_add_subregion_overlap(pci_address_space_io(dev), RCR_IOPORT,
@@ -634,6 +658,14 @@ static void piix3_initfn(Object *obj)
     s->rtc = ISA_DEVICE(object_new(TYPE_MC146818_RTC));
     qdev_prop_set_int32(DEVICE(s->rtc), "base_year", 2000);
     object_property_add_child(obj, "rtc", OBJECT(s->rtc), NULL);
+
+    if (kvm_irqchip_in_kernel()) {
+        s->pit = ISA_DEVICE(object_new(TYPE_KVM_PIT));
+    } else {
+        s->pit = ISA_DEVICE(object_new(TYPE_PIT));
+    }
+    object_property_add_child(obj, "pit", OBJECT(s->pit), NULL);
+    qdev_prop_set_uint32(DEVICE(s->pit), "iobase", 0x40);
 }
 
 static void piix3_class_init(ObjectClass *klass, void *data)

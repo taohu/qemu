@@ -46,6 +46,8 @@
 #include "sysemu/sysemu.h"
 #include "hw/timer/hpet.h"
 #include "hw/timer/mc146818rtc.h"
+#include "hw/audio/pcspk.h"
+#include "hw/timer/i8254.h"
 
 static int ich9_lpc_sci_irq(ICH9LPCState *lpc);
 
@@ -530,6 +532,7 @@ static int ich9_lpc_realize(PCIDevice *d)
 {
     ICH9LPCState *lpc = ICH9_LPC_DEVICE(d);
     qemu_irq rtc_irq;
+    qemu_irq pit_irq = NULL;
     ISABus *isa_bus;
 
     isa_bus = isa_bus_new(&d->qdev, get_system_io());
@@ -572,11 +575,30 @@ static int ich9_lpc_realize(PCIDevice *d)
             sysbus_connect_irq(SYS_BUS_DEVICE(lpc->hpet), i, lpc->pic[i]);
         }
         rtc_irq = qdev_get_gpio_in(lpc->hpet, HPET_LEGACY_RTC_INT);
+        pit_irq = qdev_get_gpio_in(lpc->hpet, HPET_LEGACY_PIT_INT);
     } else {
         isa_init_irq(lpc->rtc, &rtc_irq, RTC_ISA_IRQ);
     }
 
     rtc_set_irq(lpc->rtc, rtc_irq);
+
+    /* Realize the PIT */
+    qdev_set_parent_bus(DEVICE(lpc->pit), BUS(lpc->isa_bus));
+    qdev_init_nofail(DEVICE(lpc->pit));
+
+    if (!pit_irq) {
+        pit_irq = isa_get_irq(lpc->pit, 0);
+    }
+    if (!kvm_irqchip_in_kernel()) {
+        qdev_connect_gpio_out(DEVICE(lpc->pit), 0, pit_irq);
+    }
+    if (lpc->hpet) {
+        qdev_connect_gpio_out(DEVICE(lpc->hpet), 0,
+                              qdev_get_gpio_in(DEVICE(lpc->pit), 0));
+    }
+
+    /* FIXME this should be refactored */
+    pcspk_init(lpc->isa_bus, lpc->pit);
 
     return 0;
 }
@@ -639,6 +661,14 @@ static void ich9_lpc_initfn(Object *obj)
     s->rtc = ISA_DEVICE(object_new(TYPE_MC146818_RTC));
     qdev_prop_set_int32(DEVICE(s->rtc), "base_year", 2000);
     object_property_add_child(obj, "rtc", OBJECT(s->rtc), NULL);
+
+    if (kvm_irqchip_in_kernel()) {
+        s->pit = ISA_DEVICE(object_new(TYPE_KVM_PIT));
+    } else {
+        s->pit = ISA_DEVICE(object_new(TYPE_PIT));
+    }
+    object_property_add_child(obj, "pit", OBJECT(s->pit), NULL);
+    qdev_prop_set_uint32(DEVICE(s->pit), "iobase", 0x40);
 }
 
 static void ich9_lpc_class_init(ObjectClass *klass, void *data)

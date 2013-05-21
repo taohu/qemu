@@ -1128,9 +1128,8 @@ void pc_basic_device_init(ISABus *isa_bus, qemu_irq *gsi,
 {
     int i;
     DriveInfo *fd[MAX_FD];
-    DeviceState *hpet = NULL;
     qemu_irq *a20_line;
-    ISADevice *i8042, *port92, *vmmouse, *pit = NULL;
+    ISADevice *i8042, *port92, *vmmouse;
     qemu_irq *cpu_exit_irq;
     MemoryRegion *ioport80_io = g_new(MemoryRegion, 1);
     MemoryRegion *ioportF0_io = g_new(MemoryRegion, 1);
@@ -1140,19 +1139,6 @@ void pc_basic_device_init(ISABus *isa_bus, qemu_irq *gsi,
 
     memory_region_init_io(ioportF0_io, &ioportF0_io_ops, NULL, "ioportF0", 1);
     memory_region_add_subregion(isa_bus->address_space_io, 0xf0, ioportF0_io);
-
-    if (!xen_enabled()) {
-        if (kvm_irqchip_in_kernel()) {
-            pit = kvm_pit_init(isa_bus, 0x40);
-        } else {
-            pit = pit_init(isa_bus, 0x40, 0, NULL);
-        }
-        if (hpet) {
-            /* connect PIT to output control line of the HPET */
-            qdev_connect_gpio_out(hpet, 0, qdev_get_gpio_in(&pit->qdev, 0));
-        }
-        pcspk_init(isa_bus, pit);
-    }
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
         if (serial_hds[i]) {

@@ -30,6 +30,9 @@
 
 #define PIT_FREQ 1193182
 
+#define TYPE_PIT      "isa-pit"
+#define TYPE_KVM_PIT  "kvm-pit"
+
 typedef struct PITChannelInfo {
     int gate;
     int mode;

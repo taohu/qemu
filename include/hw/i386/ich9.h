@@ -64,6 +64,7 @@ typedef struct ICH9LPCState {
 
     DeviceState *hpet;
     ISADevice *rtc;
+    ISADevice *pit;
 
     qemu_irq *pic;
     qemu_irq *ioapic;
