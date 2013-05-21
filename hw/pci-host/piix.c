@@ -59,6 +59,9 @@ typedef struct I440FXState {
  */
 #define RCR_IOPORT 0xcf9
 
+#define TYPE_PIIX3 "PIIX3"
+#define PIIX3(obj) OBJECT_CHECK(PIIX3State, (obj), TYPE_PIIX3)
+
 typedef struct PIIX3State {
     PCIDevice dev;
 
@@ -434,9 +437,9 @@ static void piix3_write_config_xen(PCIDevice *dev,
     piix3_write_config(dev, address, val, len);
 }
 
-static void piix3_reset(void *opaque)
+static void piix3_reset(DeviceState *dev)
 {
-    PIIX3State *d = opaque;
+    PIIX3State *d = PIIX3(dev);
     uint8_t *pci_conf = d->dev.config;
 
     pci_conf[0x04] = 0x07; /* master, memory and I/O */
@@ -511,7 +514,7 @@ static const VMStateDescription vmstate_piix3_rcr = {
 };
 
 static const VMStateDescription vmstate_piix3 = {
-    .name = "PIIX3",
+    .name = TYPE_PIIX3,
     .version_id = 3,
     .minimum_version_id = 2,
     .minimum_version_id_old = 2,
@@ -557,18 +560,21 @@ static const MemoryRegionOps rcr_ops = {
     .endianness = DEVICE_LITTLE_ENDIAN
 };
 
-static int piix3_initfn(PCIDevice *dev)
+static int piix3_realize(PCIDevice *dev)
 {
-    PIIX3State *d = DO_UPCAST(PIIX3State, dev, dev);
+    PIIX3State *s = PIIX3(dev);
 
-    isa_bus_new(DEVICE(d), pci_address_space_io(dev));
+    isa_bus_new(DEVICE(s), pci_address_space_io(dev));
 
-    memory_region_init_io(&d->rcr_mem, &rcr_ops, d, "piix3-reset-control", 1);
+    memory_region_init_io(&s->rcr_mem, &rcr_ops, s, "piix3-reset-control", 1);
     memory_region_add_subregion_overlap(pci_address_space_io(dev), RCR_IOPORT,
-                                        &d->rcr_mem, 1);
+                                        &s->rcr_mem, 1);
 
-    qemu_register_reset(piix3_reset, d);
     return 0;
+}
+
+static void piix3_initfn(Object *obj)
+{
 }
 
 static void piix3_class_init(ObjectClass *klass, void *data)
@@ -578,9 +584,10 @@ static void piix3_class_init(ObjectClass *klass, void *data)
 
     dc->desc        = "ISA bridge";
     dc->vmsd        = &vmstate_piix3;
-    dc->no_user     = 1,
+    dc->no_user     = 1;
+    dc->reset       = piix3_reset;
     k->no_hotplug   = 1;
-    k->init         = piix3_initfn;
+    k->init         = piix3_realize;
     k->config_write = piix3_write_config;
     k->vendor_id    = PCI_VENDOR_ID_INTEL;
     /* 82371SB PIIX3 PCI-to-ISA bridge (Step A1) */
@@ -589,9 +596,10 @@ static void piix3_class_init(ObjectClass *klass, void *data)
 }
 
 static const TypeInfo piix3_info = {
-    .name          = "PIIX3",
+    .name          = TYPE_PIIX3,
     .parent        = TYPE_PCI_DEVICE,
     .instance_size = sizeof(PIIX3State),
+    .instance_init = piix3_initfn,
     .class_init    = piix3_class_init,
 };
 
