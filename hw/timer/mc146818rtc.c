@@ -687,6 +687,12 @@ int rtc_get_memory(ISADevice *dev, int addr)
     return s->cmos_data[addr];
 }
 
+void rtc_set_irq(ISADevice *dev, qemu_irq irq)
+{
+    RTCState *s = MC146818_RTC(dev);
+    s->irq = irq;
+}
+
 static void rtc_set_date_from_host(ISADevice *dev)
 {
     RTCState *s = MC146818_RTC(dev);
