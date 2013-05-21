@@ -92,7 +92,6 @@ void *pc_memory_init(MemoryRegion *system_memory,
 qemu_irq *pc_allocate_cpu_irq(void);
 DeviceState *pc_vga_init(ISABus *isa_bus, PCIBus *pci_bus);
 void pc_basic_device_init(ISABus *isa_bus, qemu_irq *gsi,
-                          ISADevice **rtc_state,
                           ISADevice **floppy,
                           bool no_vmport);
 void pc_init_ne2k_isa(ISABus *bus, NICInfo *nd);
@@ -102,6 +101,7 @@ void pc_cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
                   ISADevice *s);
 void pc_nic_init(ISABus *isa_bus, PCIBus *pci_bus);
 void pc_pci_device_init(PCIBus *pci_bus);
+int pc_boot_set(void *opaque, const char *boot_device);
 
 typedef void (*cpu_set_smm_t)(int smm, void *arg);
 void cpu_smm_register(cpu_set_smm_t callback, void *arg);

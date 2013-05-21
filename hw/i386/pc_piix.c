@@ -177,7 +177,7 @@ static void pc_init1(MemoryRegion *system_memory,
     }
 
     /* init basic PC hardware */
-    pc_basic_device_init(isa_bus, gsi, &rtc_state, &floppy, xen_enabled());
+    pc_basic_device_init(isa_bus, gsi, &floppy, xen_enabled());
 
     pc_nic_init(isa_bus, pci_bus);
 
@@ -200,6 +200,10 @@ static void pc_init1(MemoryRegion *system_memory,
             idebus[i] = qdev_get_child_bus(&dev->qdev, "ide.0");
         }
     }
+
+    /* FIXME */
+    rtc_state = ISA_DEVICE(object_resolve_path("rtc", NULL));
+    qemu_register_boot_set(pc_boot_set, rtc_state);
 
     pc_cmos_init(below_4g_mem_size, above_4g_mem_size, boot_device,
                  floppy, idebus[0], idebus[1], rtc_state);

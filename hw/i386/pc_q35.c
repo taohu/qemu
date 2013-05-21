@@ -172,7 +172,7 @@ static void pc_q35_init(QEMUMachineInitArgs *args)
     pc_register_ferr_irq(gsi[13]);
 
     /* init basic PC hardware */
-    pc_basic_device_init(isa_bus, gsi, &rtc_state, &floppy, false);
+    pc_basic_device_init(isa_bus, gsi, &floppy, false);
 
     /* connect pm stuff to lpc */
     ich9_lpc_pm_init(lpc);
@@ -195,6 +195,10 @@ static void pc_q35_init(QEMUMachineInitArgs *args)
                                     PCI_DEVFN(ICH9_SMB_DEV, ICH9_SMB_FUNC),
                                     0xb100),
                       8, NULL, 0);
+
+    /* FIXME */
+    rtc_state = ISA_DEVICE(object_resolve_path("rtc", NULL));
+    qemu_register_boot_set(pc_boot_set, rtc_state);
 
     pc_cmos_init(below_4g_mem_size, above_4g_mem_size, boot_device,
                  floppy, idebus[0], idebus[1], rtc_state);

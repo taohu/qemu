@@ -290,7 +290,7 @@ static int set_boot_dev(ISADevice *s, const char *boot_device, int fd_bootchk)
     return(0);
 }
 
-static int pc_boot_set(void *opaque, const char *boot_device)
+int pc_boot_set(void *opaque, const char *boot_device)
 {
     return set_boot_dev(opaque, boot_device, 0);
 }
@@ -1123,14 +1123,12 @@ static const MemoryRegionOps ioportF0_io_ops = {
 };
 
 void pc_basic_device_init(ISABus *isa_bus, qemu_irq *gsi,
-                          ISADevice **rtc_state,
                           ISADevice **floppy,
                           bool no_vmport)
 {
     int i;
     DriveInfo *fd[MAX_FD];
     DeviceState *hpet = NULL;
-    qemu_irq rtc_irq = NULL;
     qemu_irq *a20_line;
     ISADevice *i8042, *port92, *vmmouse, *pit = NULL;
     qemu_irq *cpu_exit_irq;
@@ -1142,10 +1140,6 @@ void pc_basic_device_init(ISABus *isa_bus, qemu_irq *gsi,
 
     memory_region_init_io(ioportF0_io, &ioportF0_io_ops, NULL, "ioportF0", 1);
     memory_region_add_subregion(isa_bus->address_space_io, 0xf0, ioportF0_io);
-
-    *rtc_state = rtc_init(isa_bus, 2000, rtc_irq);
-
-    qemu_register_boot_set(pc_boot_set, *rtc_state);
 
     if (!xen_enabled()) {
         if (kvm_irqchip_in_kernel()) {

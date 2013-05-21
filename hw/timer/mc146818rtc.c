@@ -729,7 +729,7 @@ static int rtc_post_load(void *opaque, int version_id)
 }
 
 static const VMStateDescription vmstate_rtc = {
-    .name = "mc146818rtc",
+    .name = TYPE_MC146818_RTC,
     .version_id = 3,
     .minimum_version_id = 1,
     .minimum_version_id_old = 1,

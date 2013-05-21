@@ -63,6 +63,7 @@ typedef struct ICH9LPCState {
     Notifier machine_ready;
 
     DeviceState *hpet;
+    ISADevice *rtc;
 
     qemu_irq *pic;
     qemu_irq *ioapic;

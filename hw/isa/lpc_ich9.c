@@ -45,6 +45,7 @@
 #include "exec/address-spaces.h"
 #include "sysemu/sysemu.h"
 #include "hw/timer/hpet.h"
+#include "hw/timer/mc146818rtc.h"
 
 static int ich9_lpc_sci_irq(ICH9LPCState *lpc);
 
@@ -528,6 +529,7 @@ static const MemoryRegionOps ich9_rst_cnt_ops = {
 static int ich9_lpc_realize(PCIDevice *d)
 {
     ICH9LPCState *lpc = ICH9_LPC_DEVICE(d);
+    qemu_irq rtc_irq;
     ISABus *isa_bus;
 
     isa_bus = isa_bus_new(&d->qdev, get_system_io());
@@ -552,6 +554,10 @@ static int ich9_lpc_realize(PCIDevice *d)
                                         ICH9_RST_CNT_IOPORT, &lpc->rst_cnt_mem,
                                         1);
 
+    /* Realize the RTC */
+    qdev_set_parent_bus(DEVICE(lpc->rtc), BUS(lpc->isa_bus));
+    qdev_init_nofail(DEVICE(lpc->rtc));
+
     /* Realize HPET */
     if (lpc->hpet) {
         int i;
@@ -565,7 +571,12 @@ static int ich9_lpc_realize(PCIDevice *d)
         for (i = 0; i < GSI_NUM_PINS; i++) {
             sysbus_connect_irq(SYS_BUS_DEVICE(lpc->hpet), i, lpc->pic[i]);
         }
+        rtc_irq = qdev_get_gpio_in(lpc->hpet, HPET_LEGACY_RTC_INT);
+    } else {
+        isa_init_irq(lpc->rtc, &rtc_irq, RTC_ISA_IRQ);
     }
+
+    rtc_set_irq(lpc->rtc, rtc_irq);
 
     return 0;
 }
@@ -624,6 +635,10 @@ static void ich9_lpc_initfn(Object *obj)
         s->hpet = DEVICE(object_new(TYPE_HPET));
         object_property_add_child(obj, "hpet", OBJECT(s->hpet), NULL);
     }
+
+    s->rtc = ISA_DEVICE(object_new(TYPE_MC146818_RTC));
+    qdev_prop_set_int32(DEVICE(s->rtc), "base_year", 2000);
+    object_property_add_child(obj, "rtc", OBJECT(s->rtc), NULL);
 }
 
 static void ich9_lpc_class_init(ObjectClass *klass, void *data)

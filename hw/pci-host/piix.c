@@ -33,6 +33,7 @@
 #include "hw/pci-host/pam.h"
 #include "sysemu/sysemu.h"
 #include "hw/timer/hpet.h"
+#include "hw/timer/mc146818rtc.h"
 
 /*
  * I440FX chipset data sheet.
@@ -72,6 +73,7 @@ typedef struct PIIX3State {
 
     ISABus *bus;
     DeviceState *hpet;
+    ISADevice *rtc;
 
     qemu_irq *pic;
 
@@ -579,8 +581,13 @@ static const MemoryRegionOps rcr_ops = {
 static int piix3_realize(PCIDevice *dev)
 {
     PIIX3State *s = PIIX3(dev);
+    qemu_irq rtc_irq;
 
     s->bus = isa_bus_new(DEVICE(s), pci_address_space_io(dev));
+
+    /* Realize the RTC */
+    qdev_set_parent_bus(DEVICE(s->rtc), BUS(s->bus));
+    qdev_init_nofail(DEVICE(s->rtc));
 
     /* Realize HPET */
     if (s->hpet) {
@@ -595,7 +602,12 @@ static int piix3_realize(PCIDevice *dev)
         for (i = 0; i < GSI_NUM_PINS; i++) {
             sysbus_connect_irq(SYS_BUS_DEVICE(s->hpet), i, s->pic[i]);
         }
+        rtc_irq = qdev_get_gpio_in(s->hpet, HPET_LEGACY_RTC_INT);
+    } else {
+        isa_init_irq(s->rtc, &rtc_irq, RTC_ISA_IRQ);
     }
+
+    rtc_set_irq(s->rtc, rtc_irq);
 
     memory_region_init_io(&s->rcr_mem, &rcr_ops, s, "piix3-reset-control", 1);
     memory_region_add_subregion_overlap(pci_address_space_io(dev), RCR_IOPORT,
@@ -619,6 +631,9 @@ static void piix3_initfn(Object *obj)
         object_property_add_child(obj, "hpet", OBJECT(s->hpet), NULL);
     }
 
+    s->rtc = ISA_DEVICE(object_new(TYPE_MC146818_RTC));
+    qdev_prop_set_int32(DEVICE(s->rtc), "base_year", 2000);
+    object_property_add_child(obj, "rtc", OBJECT(s->rtc), NULL);
 }
 
 static void piix3_class_init(ObjectClass *klass, void *data)
