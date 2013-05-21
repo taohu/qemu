@@ -109,23 +109,6 @@ static void pc_init1(MemoryRegion *system_memory,
         below_4g_mem_size = ram_size;
     }
 
-    if (pci_enabled) {
-        pci_memory = g_new(MemoryRegion, 1);
-        memory_region_init(pci_memory, "pci", INT64_MAX);
-        rom_memory = pci_memory;
-    } else {
-        pci_memory = NULL;
-        rom_memory = system_memory;
-    }
-
-    /* allocate ram and load rom/bios */
-    if (!xen_enabled()) {
-        fw_cfg = pc_memory_init(system_memory,
-                       kernel_filename, kernel_cmdline, initrd_filename,
-                       below_4g_mem_size, above_4g_mem_size,
-                       rom_memory, &ram_memory);
-    }
-
     gsi_state = g_malloc0(sizeof(*gsi_state));
     if (kvm_irqchip_in_kernel()) {
         kvm_pc_setup_irq_routing(pci_enabled);
@@ -138,13 +121,27 @@ static void pc_init1(MemoryRegion *system_memory,
     if (pci_enabled) {
         pci_bus = i440fx_init(&piix3_devfn, &isa_bus, gsi,
                               system_memory, system_io, ram_size,
-                              pci_memory, ram_memory);
+                              &pci_memory, ram_memory);
     } else {
         pci_bus = NULL;
         isa_bus = isa_bus_new(NULL, system_io);
         no_hpet = 1;
     }
     isa_bus_irqs(isa_bus, gsi);
+
+    if (pci_enabled) {
+        rom_memory = pci_memory;
+    } else {
+        rom_memory = system_memory;
+    }
+
+    /* allocate ram and load rom/bios */
+    if (!xen_enabled()) {
+        fw_cfg = pc_memory_init(system_memory,
+                       kernel_filename, kernel_cmdline, initrd_filename,
+                       below_4g_mem_size, above_4g_mem_size,
+                       rom_memory, &ram_memory);
+    }
 
     if (kvm_irqchip_in_kernel()) {
         i8259 = kvm_i8259_init(isa_bus);
