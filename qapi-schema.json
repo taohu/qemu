@@ -3692,3 +3692,30 @@
 { 'type': 'MemoryInfo',
   'data': { 'total': 'int' } }
 { 'command': 'query-memory', 'returns': 'MemoryInfo' }
+
+##
+# @DimmInfo:
+#
+# Information about status of dimm device
+#
+# @dimm: the name of the dimm
+#
+# @state: 'true' means the dimm device is plugged in, 'false' means
+#         means the dimm device is plugged out.
+#
+# Since: 1.6
+#
+##
+{ 'type': 'DimmInfo',
+  'data': {'dimm': 'str', 'state': 'bool'} }
+
+##
+# @query-dimm-info:
+#
+# Returns the state of dimm devices
+#
+# Returns: list of @DimmInfo
+#
+# Since: 1.6
+##
+{ 'command': 'query-dimm-info', 'returns': ['DimmInfo'] }
