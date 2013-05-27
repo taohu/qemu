@@ -702,6 +702,15 @@ StatusInfo *qmp_query_status(Error **errp)
     return info;
 }
 
+MemoryInfo *qmp_query_memory(Error **errp)
+{
+    MemoryInfo *info = g_malloc0(sizeof(*info));
+
+    info->total = ram_size + get_hp_memory_total();
+
+    return info;
+}
+
 /***********************************************************/
 /* real time host monotonic timer */
 

@@ -3047,3 +3047,25 @@ Example:
 <- { "return": {} }
 
 EQMP
+
+    {
+        .name       = "query-memory",
+        .args_type  = "",
+        .mhandler.cmd_new = qmp_marshal_input_query_memory
+    },
+SQMP
+query-memory
+----------
+
+Return a json-object with the following information:
+
+- "total": total memory in bytes, including hotplugged dimms
+
+Example:
+
+-> { "execute": "query-memory" }
+<- {
+      "return": { "total": 1073741824 }
+   }
+
+EQMP

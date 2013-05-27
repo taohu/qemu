@@ -3679,3 +3679,16 @@
             '*cpuid-input-ecx': 'int',
             'cpuid-register': 'X86CPURegister32',
             'features': 'int' } }
+
+##
+# @query-memory:
+#
+# Returns total memory in bytes, including hotplugged dimms
+#
+# Returns: int
+#
+# Since: 1.6
+##
+{ 'type': 'MemoryInfo',
+  'data': { 'total': 'int' } }
+{ 'command': 'query-memory', 'returns': 'MemoryInfo' }

@@ -693,6 +693,14 @@ void hmp_info_tpm(Monitor *mon, const QDict *qdict)
     qapi_free_TPMInfoList(info_list);
 }
 
+void hmp_info_memory(Monitor *mon, const QDict *qdict)
+{
+    MemoryInfo *mem;
+    mem = qmp_query_memory(NULL);
+    monitor_printf(mon, "MemTotal: %" PRIu64 "\n", mem->total);
+    qapi_free_MemoryInfo(mem);
+}
+
 void hmp_quit(Monitor *mon, const QDict *qdict)
 {
     monitor_suspend(mon);
