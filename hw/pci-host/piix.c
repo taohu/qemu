@@ -32,6 +32,7 @@
 #include "hw/xen/xen.h"
 #include "hw/pci-host/pam.h"
 #include "sysemu/sysemu.h"
+#include "hw/nvram/fw_cfg.h"
 
 /*
  * I440FX chipset data sheet.
@@ -229,6 +230,8 @@ static PCIBus *i440fx_common_init(const char *device_name,
     PIIX3State *piix3;
     I440FXPMCState *f;
     I440FXState *i440fx;
+    uint64_t *pci_window_fw_cfg;
+    void *fw_cfg;
 
     i440fx = I440FX_DEVICE(object_new(TYPE_I440FX_DEVICE));
     s = PCI_HOST_BRIDGE(i440fx);
@@ -265,6 +268,16 @@ static PCIBus *i440fx_common_init(const char *device_name,
 
     *piix3_devfn = piix3->dev.devfn;
     *pci_address_space = &i440fx->pci_address_space;
+
+    fw_cfg = fw_cfg_find();
+    if (fw_cfg) {
+        pci_window_fw_cfg = g_new0(uint64_t, 2);
+        pci_window_fw_cfg[0] = cpu_to_le64(f->dev.below_4g_mem_size);
+        pci_window_fw_cfg[1] = cpu_to_le64(0x100000000ULL +
+                                           f->dev.above_4g_mem_size);
+        fw_cfg_add_bytes(fw_cfg, FW_CFG_PCI_WINDOW,
+                         (uint8_t *)pci_window_fw_cfg, 2 * 8);
+    }
 
     return s->bus;
 }
