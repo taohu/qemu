@@ -158,6 +158,7 @@ static void pc_init1(MemoryRegion *system_memory,
         fw_cfg = pc_memory_init(kernel_filename, kernel_cmdline, initrd_filename,
                                 below_4g_mem_size, above_4g_mem_size,
                                 guest_info);
+        bochs_meminfo_bios_init(fw_cfg);
     }
 
     if (kvm_irqchip_in_kernel()) {
