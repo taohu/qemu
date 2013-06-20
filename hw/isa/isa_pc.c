@@ -1,4 +1,6 @@
+#include "hw/i386/pc.h"
 #include "hw/isa/isa_pc.h"
+#include "hw/loader.h"
 
 static void isa_pc_realize(DeviceState *dev, Error **errp)
 {
@@ -17,6 +19,15 @@ static void isa_pc_realize(DeviceState *dev, Error **errp)
     memory_region_init_ram(&isapc->ram, NULL, "pc.ram", isapc->ram_size);
     vmstate_register_ram_global(&isapc->ram);
     memory_region_add_subregion(isapc->address_space_mem, 0, &isapc->ram);
+
+    pc_system_firmware_init(isapc->address_space_mem);
+
+    memory_region_init_ram(&isapc->option_roms, NULL, "pc.rom", PC_ROM_SIZE);
+    vmstate_register_ram_global(&isapc->option_roms);
+    memory_region_add_subregion_overlap(isapc->address_space_mem,
+                                        PC_ROM_MIN_VGA,
+                                        &isapc->option_roms,
+                                        1);
 }
 
 static void isa_pc_class_init(ObjectClass *klass, void *data)

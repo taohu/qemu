@@ -87,7 +87,6 @@ static void pc_init1(MemoryRegion *system_memory,
     ISADevice *rtc_state;
     ISADevice *floppy;
     MemoryRegion *pci_memory;
-    MemoryRegion *rom_memory;
     DeviceState *icc_bridge;
     FWCfgState *fw_cfg = NULL;
     PcGuestInfo *guest_info;
@@ -154,18 +153,11 @@ static void pc_init1(MemoryRegion *system_memory,
     }
     isa_bus_irqs(isa_bus, gsi);
 
-    if (pci_enabled) {
-        rom_memory = pci_memory;
-    } else {
-        rom_memory = system_memory;
-    }
-
     /* allocate ram and load rom/bios */
     if (!xen_enabled()) {
-        fw_cfg = pc_memory_init(system_memory,
-                                kernel_filename, kernel_cmdline, initrd_filename,
+        fw_cfg = pc_memory_init(kernel_filename, kernel_cmdline, initrd_filename,
                                 below_4g_mem_size, above_4g_mem_size,
-                                rom_memory, guest_info);
+                                guest_info);
     }
 
     if (kvm_irqchip_in_kernel()) {

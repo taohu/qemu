@@ -19,6 +19,7 @@ struct ISAPc {
 
     MemoryRegion *address_space_mem;
     MemoryRegion *address_space_io;
+    MemoryRegion option_roms;
     MemoryRegion ram;
     ram_addr_t ram_size;
 };
