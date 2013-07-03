@@ -83,6 +83,7 @@ static void ich9_gpe_writeb(void *opaque, hwaddr addr, uint64_t val,
 {
     ICH9LPCPMRegs *pm = opaque;
     acpi_gpe_ioport_writeb(&pm->acpi_regs, addr, val);
+    pm_update_sci(pm);
 }
 
 static const MemoryRegionOps ich9_gpe_ops = {
