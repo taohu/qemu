@@ -1190,6 +1190,18 @@ static int64_t coroutine_fn raw_co_get_block_status(BlockDriverState *bs,
     return ret;
 }
 
+static int raw_zero_init(BlockDriverState *bs, int64_t offset, int64_t length)
+{
+    BDRVRawState *s = bs->opaque;
+    int64_t len = bdrv_getlength(bs);
+
+    if (offset + length < 0 || offset + length > len) {
+        return -1;
+    }
+
+    return posix_fallocate(s->fd, offset, length);
+}
+
 static coroutine_fn BlockDriverAIOCB *raw_aio_discard(BlockDriverState *bs,
     int64_t sector_num, int nb_sectors,
     BlockDriverCompletionFunc *cb, void *opaque)
@@ -1222,6 +1234,7 @@ static BlockDriver bdrv_file = {
     .bdrv_close = raw_close,
     .bdrv_create = raw_create,
     .bdrv_has_zero_init = bdrv_has_zero_init_1,
+    .bdrv_zero_init = raw_zero_init,
     .bdrv_co_get_block_status = raw_co_get_block_status,
 
     .bdrv_aio_readv = raw_aio_readv,
