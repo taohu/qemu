@@ -227,6 +227,8 @@ struct BlockDriver {
      */
     int (*bdrv_has_zero_init)(BlockDriverState *bs);
 
+    int (*bdrv_zero_init)(BlockDriverState *bs, int64_t offset, int64_t length);
+
     QLIST_ENTRY(BlockDriver) list;
 };
 
