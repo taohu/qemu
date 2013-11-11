@@ -2180,6 +2180,12 @@ static int qcow2_amend_options(BlockDriverState *bs,
     return 0;
 }
 
+static int qcow2_zero_init(BlockDriverState *bs, int64_t offset,
+                           int64_t length)
+{
+    return bdrv_zero_init(bs->file, offset, length);
+}
+
 static QEMUOptionParameter qcow2_create_options[] = {
     {
         .name = BLOCK_OPT_SIZE,
@@ -2234,6 +2240,7 @@ static BlockDriver bdrv_qcow2 = {
     .bdrv_reopen_prepare  = qcow2_reopen_prepare,
     .bdrv_create        = qcow2_create,
     .bdrv_has_zero_init = bdrv_has_zero_init_1,
+    .bdrv_zero_init     = qcow2_zero_init,
     .bdrv_co_get_block_status = qcow2_co_get_block_status,
     .bdrv_set_key       = qcow2_set_key,
     .bdrv_make_empty    = qcow2_make_empty,
