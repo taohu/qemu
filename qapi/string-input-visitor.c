@@ -97,6 +97,23 @@ static void parse_type_number(Visitor *v, double *obj, const char *name,
     *obj = val;
 }
 
+static void parse_type_size(Visitor *v, uint64_t *obj, const char *name,
+                            Error **errp)
+{
+    StringInputVisitor *siv = DO_UPCAST(StringInputVisitor, visitor, v);
+    int64_t val;
+    char *endp;
+
+    val = strtosz_suffix(siv->string ? siv->string : "", &endp,
+                         STRTOSZ_DEFSUFFIX_B);
+    if (val < 0 || *endp != '\0') {
+        error_set(errp, QERR_INVALID_PARAMETER_VALUE, name,
+                  "a size value representible as a non-negative int64");
+        return;
+    }
+    *obj = val;
+}
+
 static void parse_start_optional(Visitor *v, bool *present,
                                  const char *name, Error **errp)
 {
@@ -131,6 +148,7 @@ StringInputVisitor *string_input_visitor_new(const char *str)
     v->visitor.type_bool = parse_type_bool;
     v->visitor.type_str = parse_type_str;
     v->visitor.type_number = parse_type_number;
+    v->visitor.type_size = parse_type_size;
     v->visitor.start_optional = parse_start_optional;
 
     v->string = str;
