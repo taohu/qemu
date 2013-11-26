@@ -3102,6 +3102,19 @@ int bdrv_has_zero_init(BlockDriverState *bs)
     return 0;
 }
 
+int bdrv_preallocate(BlockDriverState *bs, int64_t offset, int64_t length)
+{
+    if (bs->backing_hd) {
+        return -1;
+    }
+
+    if (bs->drv->bdrv_preallocate) {
+        return bs->drv->bdrv_preallocate(bs, offset, length);
+    }
+
+    return -1;
+}
+
 typedef struct BdrvCoGetBlockStatusData {
     BlockDriverState *bs;
     BlockDriverState *base;
