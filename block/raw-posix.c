@@ -1089,11 +1089,22 @@ static int raw_create(const char *filename, QEMUOptionParameter *options,
     int fd;
     int result = 0;
     int64_t total_size = 0;
+    int prealloc = PREALLOC_OFF;
 
     /* Read out options */
     while (options && options->name) {
         if (!strcmp(options->name, BLOCK_OPT_SIZE)) {
             total_size = options->value.n / BDRV_SECTOR_SIZE;
+        } else if (!strcmp(options->name, BLOCK_OPT_PREALLOC)) {
+            if (!options->value.s || !strcmp(options->value.s, "off")) {
+                prealloc = PREALLOC_OFF;
+            } else if (!strcmp(options->value.s, "full")) {
+                prealloc = PREALLOC_FULL;
+            } else {
+                error_setg(errp, "Invalid preallocation mode: '%s'",
+                           options->value.s);
+                return -EINVAL;
+            }
         }
         options++;
     }
@@ -1107,6 +1118,12 @@ static int raw_create(const char *filename, QEMUOptionParameter *options,
         if (ftruncate(fd, total_size * BDRV_SECTOR_SIZE) != 0) {
             result = -errno;
             error_setg_errno(errp, -result, "Could not resize file");
+        }
+        if (prealloc == PREALLOC_FULL &&
+            raw_preallocate2(fd, 0, total_size * BDRV_SECTOR_SIZE) != 0) {
+            result = -errno;
+            error_setg_errno(errp, -result,
+                             "Could not preallocate data for the new file");
         }
         if (qemu_close(fd) != 0) {
             result = -errno;
@@ -1237,6 +1254,11 @@ static QEMUOptionParameter raw_create_options[] = {
         .name = BLOCK_OPT_SIZE,
         .type = OPT_SIZE,
         .help = "Virtual disk size"
+    },
+    {
+        .name = BLOCK_OPT_PREALLOC,
+        .type = OPT_STRING,
+        .help = "Preallocation mode (allowed values: off, full)"
     },
     { NULL }
 };
