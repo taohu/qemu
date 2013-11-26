@@ -1050,6 +1050,39 @@ static int64_t raw_get_allocated_file_size(BlockDriverState *bs)
     return (int64_t)st.st_blocks * 512;
 }
 
+#ifdef __linux__
+static int raw_preallocate2(int fd, int64_t offset, int64_t length)
+{
+    int ret = -1;
+
+    ret = fallocate(fd, 0, offset, length);
+
+    /* fallback to posix_fallocate() if fallocate() is not supported */
+    if (ret < 0 && (errno == ENOSYS || errno == EOPNOTSUPP)) {
+        ret = posix_fallocate(fd, offset, length);
+    }
+
+    return ret;
+}
+#else
+static int raw_preallocate2(int fd, int64_t offset, int64_t length)
+{
+    return posix_fallocate(fd, offset, length);
+}
+#endif
+
+static int raw_preallocate(BlockDriverState *bs, int64_t offset, int64_t length)
+{
+    BDRVRawState *s = bs->opaque;
+    int64_t len = bdrv_getlength(bs);
+
+    if (offset + length < 0 || offset + length > len) {
+        return -1;
+    }
+
+    return raw_preallocate2(s->fd, offset, length);
+}
+
 static int raw_create(const char *filename, QEMUOptionParameter *options,
                       Error **errp)
 {
@@ -1221,6 +1254,7 @@ static BlockDriver bdrv_file = {
     .bdrv_close = raw_close,
     .bdrv_create = raw_create,
     .bdrv_has_zero_init = bdrv_has_zero_init_1,
+    .bdrv_preallocate = raw_preallocate,
     .bdrv_co_get_block_status = raw_co_get_block_status,
 
     .bdrv_aio_readv = raw_aio_readv,
