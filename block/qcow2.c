@@ -1608,7 +1608,7 @@ static int qcow2_create(const char *filename, QEMUOptionParameter *options,
     uint64_t sectors = 0;
     int flags = 0;
     size_t cluster_size = DEFAULT_CLUSTER_SIZE;
-    int prealloc = 0;
+    int prealloc = PREALLOC_OFF;
     int version = 3;
     Error *local_err = NULL;
     int ret;
@@ -1629,9 +1629,9 @@ static int qcow2_create(const char *filename, QEMUOptionParameter *options,
             }
         } else if (!strcmp(options->name, BLOCK_OPT_PREALLOC)) {
             if (!options->value.s || !strcmp(options->value.s, "off")) {
-                prealloc = 0;
+                prealloc = PREALLOC_OFF;
             } else if (!strcmp(options->value.s, "metadata")) {
-                prealloc = 1;
+                prealloc = PREALLOC_METADATA;
             } else {
                 error_setg(errp, "Invalid preallocation mode: '%s'",
                            options->value.s);
