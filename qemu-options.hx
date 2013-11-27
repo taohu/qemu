@@ -210,8 +210,11 @@ use is discouraged as it may be removed from future versions.
 ETEXI
 
 DEF("m", HAS_ARG, QEMU_OPTION_m,
-    "-m megs         set virtual RAM size to megs MB [default="
-    stringify(DEFAULT_RAM_SIZE) "]\n", QEMU_ARCH_ALL)
+    "-m [mem=]megs\n"
+    "                configure guest RAM\n"
+    "                mem: initial amount of guest memory (default: "
+    stringify(DEFAULT_RAM_SIZE) "Mb)\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -m @var{megs}
 @findex -m
