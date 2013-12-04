@@ -249,6 +249,7 @@ static QTAILQ_HEAD(, FWBootEntry) fw_boot_order =
     QTAILQ_HEAD_INITIALIZER(fw_boot_order);
 
 int nb_numa_nodes;
+int nb_numa_mem_nodes;
 NodeInfo numa_info[MAX_NODES];
 
 uint8_t qemu_uuid[16];
@@ -2845,6 +2846,7 @@ int main(int argc, char **argv, char **envp)
     }
 
     nb_numa_nodes = 0;
+    nb_numa_mem_nodes = 0;
     nb_nics = 0;
 
     bdrv_init_with_whitelist();

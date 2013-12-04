@@ -135,6 +135,7 @@ extern QEMUClockType rtc_clock;
 #define MAX_NODES 64
 #define MAX_CPUMASK_BITS 255
 extern int nb_numa_nodes;
+extern int nb_numa_mem_nodes;
 typedef struct node_info {
     uint64_t node_mem;
     DECLARE_BITMAP(node_cpu, MAX_CPUMASK_BITS);

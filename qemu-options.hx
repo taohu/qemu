@@ -95,11 +95,13 @@ specifies the maximum number of hotpluggable CPUs.
 ETEXI
 
 DEF("numa", HAS_ARG, QEMU_OPTION_numa,
-    "-numa node[,mem=size][,cpus=cpu[-cpu]][,nodeid=node]\n", QEMU_ARCH_ALL)
+    "-numa node[,nodeid=node][,cpus=cpu[-cpu]]\n"
+    "-numa mem[,nodeid=node][,size=size]\n"
+    , QEMU_ARCH_ALL)
 STEXI
 @item -numa @var{opts}
 @findex -numa
-Simulate a multi node NUMA system. If mem and cpus are omitted, resources
+Simulate a multi node NUMA system. If @var{size} and @var{cpus} are omitted, resources
 are split equally.
 ETEXI
 

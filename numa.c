@@ -74,6 +74,31 @@ static int numa_node_parse(NumaNodeOptions *opts)
     return 0;
 }
 
+static int numa_mem_parse(NumaMemOptions *opts)
+{
+    uint16_t nodenr;
+    uint64_t mem_size;
+
+    if (opts->has_nodeid) {
+        nodenr = opts->nodeid;
+    } else {
+        nodenr = nb_numa_mem_nodes;
+    }
+
+    if (nodenr >= MAX_NODES) {
+        fprintf(stderr, "qemu: Max number of NUMA nodes reached: %"
+                PRIu16 "\n", nodenr);
+        return -1;
+    }
+
+    if (opts->has_size) {
+        mem_size = opts->size;
+        numa_info[nodenr].node_mem = mem_size;
+    }
+
+    return 0;
+}
+
 int numa_init_func(QemuOpts *opts, void *opaque)
 {
     NumaOptions *object = NULL;
@@ -101,6 +126,13 @@ int numa_init_func(QemuOpts *opts, void *opaque)
         }
         nb_numa_nodes++;
         break;
+    case NUMA_OPTIONS_KIND_MEM:
+        ret = numa_mem_parse(object->mem);
+        if (ret) {
+            goto error;
+        }
+        nb_numa_mem_nodes++;
+        break;
     default:
         fprintf(stderr, "qemu: Invalid NUMA options type.\n");
         ret = -1;
@@ -119,6 +151,10 @@ error:
 
 void set_numa_nodes(void)
 {
+    if (nb_numa_mem_nodes > nb_numa_nodes) {
+        nb_numa_nodes = nb_numa_mem_nodes;
+    }
+
     if (nb_numa_nodes > 0) {
         int i;
 
