@@ -1175,6 +1175,10 @@ FWCfgState *pc_memory_init(MemoryRegion *system_memory,
     memory_region_init_alias(ram_below_4g, NULL, "ram-below-4g", ram,
                              0, below_4g_mem_size);
     memory_region_add_subregion(system_memory, 0, ram_below_4g);
+    if (memory_region_set_mem_policy(ram_below_4g, 0, below_4g_mem_size, 0)) {
+        fprintf(stderr, "qemu: set below 4g memory policy failed\n");
+        exit(1);
+    }
     e820_add_entry(0, below_4g_mem_size, E820_RAM);
     if (above_4g_mem_size > 0) {
         ram_above_4g = g_malloc(sizeof(*ram_above_4g));
@@ -1182,6 +1186,11 @@ FWCfgState *pc_memory_init(MemoryRegion *system_memory,
                                  below_4g_mem_size, above_4g_mem_size);
         memory_region_add_subregion(system_memory, 0x100000000ULL,
                                     ram_above_4g);
+        if (memory_region_set_mem_policy(ram_above_4g, 0, above_4g_mem_size,
+                                     below_4g_mem_size)) {
+            fprintf(stderr, "qemu: set above 4g memory policy failed\n");
+            exit(1);
+        }
         e820_add_entry(0x100000000ULL, above_4g_mem_size, E820_RAM);
     }
 

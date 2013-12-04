@@ -903,6 +903,21 @@ void memory_region_transaction_begin(void);
 void memory_region_transaction_commit(void);
 
 /**
+ * memory_region_set_mem_policy: Set memory policy
+ *
+ * Set the memory policy for the specified area.
+ *
+ * @mr: a MemoryRegion we are setting memory policy for
+ * @start: the start offset of the specific region in this MemoryRegion
+ * @length: the specific memory area length
+ * @offset: the start offset of the specific area in NUMA setting
+ */
+int memory_region_set_mem_policy(MemoryRegion *mr,
+                                 ram_addr_t start,
+                                 ram_addr_t length,
+                                 ram_addr_t offset);
+
+/**
  * memory_listener_register: register callbacks to be called when memory
  *                           sections are mapped or unmapped into an address
  *                           space
