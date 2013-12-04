@@ -28,6 +28,7 @@
 #include "qapi/opts-visitor.h"
 #include "qapi/dealloc-visitor.h"
 #include "exec/memory.h"
+#include "qmp-commands.h"
 
 #ifdef __linux__
 #include <sys/syscall.h>
@@ -339,4 +340,69 @@ void set_numa_modes(void)
             }
         }
     }
+}
+
+NUMANodeList *qmp_query_numa(Error **errp)
+{
+    NUMANodeList *head = NULL, *cur_item = NULL;
+    CPUState *cpu;
+    int i;
+
+    for (i = 0; i < nb_numa_nodes; i++) {
+        NUMANodeList *info;
+        uint16List *cur_cpu_item = NULL;
+        info = g_malloc0(sizeof(*info));
+        info->value = g_malloc0(sizeof(*info->value));
+        info->value->nodeid = i;
+        CPU_FOREACH(cpu) {
+            if (cpu->numa_node == i) {
+                uint16List *node_cpu = g_malloc0(sizeof(*node_cpu));
+                node_cpu->value = cpu->cpu_index;
+
+                if (!cur_cpu_item) {
+                    info->value->cpus = cur_cpu_item = node_cpu;
+                } else {
+                    cur_cpu_item->next = node_cpu;
+                    cur_cpu_item = node_cpu;
+                }
+            }
+        }
+        info->value->memory = numa_info[i].node_mem;
+
+#ifdef __linux__
+        info->value->policy = numa_info[i].policy;
+        info->value->relative = numa_info[i].relative;
+
+        unsigned long first, next;
+        next = first = find_first_bit(numa_info[i].host_mem, MAX_NODES);
+        if (first == MAX_NODES) {
+            goto end;
+        }
+        uint16List *cur_node_item = g_malloc0(sizeof(*cur_node_item));
+        cur_node_item->value = first;
+        info->value->host_nodes = cur_node_item;
+        do {
+            next = find_next_bit(numa_info[i].host_mem, MAX_NODES,
+                                 next + 1);
+            if (next == MAX_NODES) {
+                break;
+            }
+
+            uint16List *host_node = g_malloc0(sizeof(*host_node));
+            host_node->value = next;
+            cur_node_item->next = host_node;
+            cur_node_item = host_node;
+        } while (true);
+end:
+#endif
+
+        if (!cur_item) {
+            head = cur_item = info;
+        } else {
+            cur_item->next = info;
+            cur_item = info;
+        }
+    }
+
+    return head;
 }

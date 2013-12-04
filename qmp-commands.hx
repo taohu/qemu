@@ -3457,3 +3457,52 @@ Example:
                    } } ] }
 
 EQMP
+
+    {
+        .name = "query-numa",
+        .args_type = "",
+        .mhandler.cmd_new = qmp_marshal_input_query_numa,
+    },
+
+SQMP
+query-numa
+---------
+
+Show NUMA information.
+
+Return a json-array. Each NUMA node is represented by a json-object,
+which contains:
+
+- "nodeid": NUMA node ID (json-int)
+- "cpus": a json-arry of contained VCPUs
+- "memory": amount of memory in each node in Byte (json-int)
+- "policy": memory policy of this node (json-string)
+- "relative": if host nodes is relative for its memory policy (json-bool)
+- "host-nodes": a json-array of host nodes for its memory policy
+
+Arguments:
+
+Example:
+
+-> { "excute": "query-numa" }
+<- { "return":[
+        {
+            "nodeid": 0,
+            "cpus": [0, 1],
+            "memory": 536870912,
+            "policy": "membind",
+            "relative": false,
+            "host-nodes": [0, 1]
+        },
+        {
+            "nodeid": 1,
+            "cpus": [2, 3],
+            "memory": 536870912,
+            "policy": "interleave",
+            "relative": false,
+            "host-nodes": [1]
+        }
+     ]
+   }
+
+EQMP
