@@ -2843,6 +2843,9 @@ int main(int argc, char **argv, char **envp)
     for (i = 0; i < MAX_NODES; i++) {
         numa_info[i].node_mem = 0;
         bitmap_zero(numa_info[i].node_cpu, MAX_CPUMASK_BITS);
+        bitmap_zero(numa_info[i].host_mem, MAX_NODES);
+        numa_info[i].policy = NUMA_NODE_POLICY_DEFAULT;
+        numa_info[i].relative = false;
     }
 
     nb_numa_nodes = 0;

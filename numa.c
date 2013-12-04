@@ -78,6 +78,7 @@ static int numa_mem_parse(NumaMemOptions *opts)
 {
     uint16_t nodenr;
     uint64_t mem_size;
+    uint16List *nodes;
 
     if (opts->has_nodeid) {
         nodenr = opts->nodeid;
@@ -94,6 +95,23 @@ static int numa_mem_parse(NumaMemOptions *opts)
     if (opts->has_size) {
         mem_size = opts->size;
         numa_info[nodenr].node_mem = mem_size;
+    }
+
+    if (opts->has_policy) {
+        numa_info[nodenr].policy = opts->policy;
+    }
+
+    if (opts->has_relative) {
+        numa_info[nodenr].relative = opts->relative;
+    }
+
+    for (nodes = opts->host_nodes; nodes; nodes = nodes->next) {
+        if (nodes->value > MAX_NODES) {
+            fprintf(stderr, "qemu: node number %" PRIu16 " is bigger than %d\n",
+                    nodes->value, MAX_NODES);
+            continue;
+        }
+        bitmap_set(numa_info[nodenr].host_mem, nodes->value, 1);
     }
 
     return 0;

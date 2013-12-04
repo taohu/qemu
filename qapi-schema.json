@@ -4452,6 +4452,26 @@
    '*mem':    'str' }}
 
 ##
+# @NumaNodePolicy
+#
+# NUMA node policy types
+#
+# @default: restore default policy, remove any nondefault policy
+#
+# @preferred: set the preferred node for allocation
+#
+# @membind: a strict policy that restricts memory allocation to the
+#           nodes specified
+#
+# @interleave: the page allocations is interleaved across the set
+#              of nodes specified
+#
+# Since 1.7
+##
+{ 'enum': 'NumaNodePolicy',
+  'data': [ 'default', 'preferred', 'membind', 'interleave' ] }
+
+##
 # @NumaMemOptions
 #
 # Set memory information of guest NUMA node. (for OptsVisitor)
@@ -4460,9 +4480,18 @@
 #
 # @size: #optional memory size of this node
 #
+# @policy: #optional memory policy of this node
+#
+# @relative: #optional if the nodes specified are relative
+#
+# @host-nodes: #optional host nodes for its memory policy
+#
 # Since 1.7
 ##
 { 'type': 'NumaMemOptions',
   'data': {
-   '*nodeid': 'uint16',
-   '*size':   'size' }}
+   '*nodeid':     'uint16',
+   '*size':       'size',
+   '*policy':     'NumaNodePolicy',
+   '*relative':   'bool',
+   '*host-nodes': ['uint16'] }}
