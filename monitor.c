@@ -1989,25 +1989,6 @@ static void do_info_mtree(Monitor *mon, const QDict *qdict)
     mtree_info((fprintf_function)monitor_printf, mon);
 }
 
-static void do_info_numa(Monitor *mon, const QDict *qdict)
-{
-    int i;
-    CPUState *cpu;
-
-    monitor_printf(mon, "%d nodes\n", nb_numa_nodes);
-    for (i = 0; i < nb_numa_nodes; i++) {
-        monitor_printf(mon, "node %d cpus:", i);
-        CPU_FOREACH(cpu) {
-            if (cpu->numa_node == i) {
-                monitor_printf(mon, " %d", cpu->cpu_index);
-            }
-        }
-        monitor_printf(mon, "\n");
-        monitor_printf(mon, "node %d size: %" PRId64 " MB\n", i,
-            numa_info[i].node_mem >> 20);
-    }
-}
-
 #ifdef CONFIG_PROFILER
 
 int64_t qemu_time;
@@ -2775,7 +2756,7 @@ static mon_cmd_t info_cmds[] = {
         .args_type  = "",
         .params     = "",
         .help       = "show NUMA information",
-        .mhandler.cmd = do_info_numa,
+        .mhandler.cmd = hmp_info_numa,
     },
     {
         .name       = "usb",

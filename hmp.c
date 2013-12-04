@@ -25,6 +25,10 @@
 #include "ui/console.h"
 #include "block/qapi.h"
 #include "qemu-io.h"
+#include "qapi-visit.h"
+#include "qapi/opts-visitor.h"
+#include "qapi/dealloc-visitor.h"
+#include "sysemu/sysemu.h"
 
 static void hmp_handle_error(Monitor *mon, Error **errp)
 {
@@ -1642,4 +1646,57 @@ void hmp_object_del(Monitor *mon, const QDict *qdict)
 
     qmp_object_del(id, &err);
     hmp_handle_error(mon, &err);
+}
+
+void hmp_info_numa(Monitor *mon, const QDict *qdict)
+{
+    NUMANodeList *node_list, *node;
+    uint16List *head;
+    int nodeid;
+    char *policy_str = NULL;
+
+    node_list = qmp_query_numa(NULL);
+
+    monitor_printf(mon, "%d nodes\n", nb_numa_nodes);
+    for (node = node_list; node; node = node->next) {
+        nodeid = node->value->nodeid;
+        monitor_printf(mon, "node %d cpus:", nodeid);
+        head = node->value->cpus;
+        for (head = node->value->cpus; head != NULL; head = head->next) {
+            monitor_printf(mon, " %d", (int)head->value);
+        }
+        monitor_printf(mon, "\n");
+        monitor_printf(mon, "node %d size: %" PRId64 " MB\n",
+                       nodeid, node->value->memory >> 20);
+        switch (node->value->policy) {
+        case NUMA_NODE_POLICY_DEFAULT:
+            policy_str = g_strdup("default");
+            break;
+        case NUMA_NODE_POLICY_PREFERRED:
+            policy_str = g_strdup("preferred");
+            break;
+        case NUMA_NODE_POLICY_MEMBIND:
+            policy_str = g_strdup("membind");
+            break;
+        case NUMA_NODE_POLICY_INTERLEAVE:
+            policy_str = g_strdup("interleave");
+            break;
+        default:
+            break;
+        }
+        monitor_printf(mon, "node %d policy: %s\n",
+                       nodeid, policy_str ? : " ");
+        if (policy_str) {
+            free(policy_str);
+        }
+        monitor_printf(mon, "node %d relative: %s\n", nodeid,
+                       node->value->relative ? "true" : "false");
+        monitor_printf(mon, "node %d host-nodes:", nodeid);
+        for (head = node->value->host_nodes; head != NULL; head = head->next) {
+            monitor_printf(mon, " %d", (int)head->value);
+        }
+        monitor_printf(mon, "\n");
+    }
+
+    qapi_free_NUMANodeList(node_list);
 }
