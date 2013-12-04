@@ -4429,7 +4429,8 @@
 ##
 { 'union': 'NumaOptions',
   'data': {
-    'node': 'NumaNodeOptions' }}
+    'node': 'NumaNodeOptions',
+    'mem' : 'NumaMemOptions' }}
 
 ##
 # @NumaNodeOptions
@@ -4449,3 +4450,19 @@
    '*nodeid': 'uint16',
    '*cpus':   ['uint16'],
    '*mem':    'str' }}
+
+##
+# @NumaMemOptions
+#
+# Set memory information of guest NUMA node. (for OptsVisitor)
+#
+# @nodeid: #optional NUMA node ID
+#
+# @size: #optional memory size of this node
+#
+# Since 1.7
+##
+{ 'type': 'NumaMemOptions',
+  'data': {
+   '*nodeid': 'uint16',
+   '*size':   'size' }}
