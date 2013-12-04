@@ -4420,3 +4420,33 @@
 # Since: 1.7
 ##
 { 'command': 'blockdev-add', 'data': { 'options': 'BlockdevOptions' } }
+
+##
+# @NumaOptions
+#
+# A discriminated record of NUMA options. (for OptsVisitor)
+#
+# Since 2.0
+##
+{ 'union': 'NumaOptions',
+  'data': {
+    'node': 'NumaNodeOptions' }}
+
+##
+# @NumaNodeOptions
+#
+# Create a guest NUMA node. (for OptsVisitor)
+#
+# @nodeid: #optional NUMA node ID
+#
+# @cpus: #optional VCPUs belong to this node
+#
+# @mem: #optional memory size of this node
+#
+# Since: 2.0
+##
+{ 'type': 'NumaNodeOptions',
+  'data': {
+   '*nodeid': 'uint16',
+   '*cpus':   ['uint16'],
+   '*mem':    'str' }}
