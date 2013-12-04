@@ -24,101 +24,97 @@
  */
 
 #include "sysemu/sysemu.h"
+#include "qapi-visit.h"
+#include "qapi/opts-visitor.h"
+#include "qapi/dealloc-visitor.h"
+QemuOptsList qemu_numa_opts = {
+    .name = "numa",
+    .implied_opt_name = "type",
+    .head = QTAILQ_HEAD_INITIALIZER(qemu_numa_opts.head),
+    .desc = { { 0 } } /* validated with OptsVisitor */
+};
 
-static void numa_node_parse_cpus(int nodenr, const char *cpus)
+static int numa_node_parse(NumaNodeOptions *opts)
 {
-    char *endptr;
-    unsigned long long value, endvalue;
+    uint16_t nodenr;
+    uint16List *cpus = NULL;
 
-    /* Empty CPU range strings will be considered valid, they will simply
-     * not set any bit in the CPU bitmap.
-     */
-    if (!*cpus) {
-        return;
-    }
-
-    if (parse_uint(cpus, &value, &endptr, 10) < 0) {
-        goto error;
-    }
-    if (*endptr == '-') {
-        if (parse_uint_full(endptr + 1, &endvalue, 10) < 0) {
-            goto error;
-        }
-    } else if (*endptr == '\0') {
-        endvalue = value;
+    if (opts->has_nodeid) {
+        nodenr = opts->nodeid;
     } else {
-        goto error;
+        nodenr = nb_numa_nodes;
     }
 
-    if (endvalue >= MAX_CPUMASK_BITS) {
-        endvalue = MAX_CPUMASK_BITS - 1;
-        fprintf(stderr,
-            "qemu: NUMA: A max of %d VCPUs are supported\n",
-             MAX_CPUMASK_BITS);
+    if (nodenr >= MAX_NODES) {
+        fprintf(stderr, "qemu: Max number of NUMA nodes reached: %"
+                PRIu16 "\n", nodenr);
+        return -1;
     }
 
-    if (endvalue < value) {
-        goto error;
+    for (cpus = opts->cpus; cpus; cpus = cpus->next) {
+        if (cpus->value > MAX_CPUMASK_BITS) {
+            fprintf(stderr, "qemu: cpu number %" PRIu16 " is bigger than %d",
+                    cpus->value, MAX_CPUMASK_BITS);
+            continue;
+        }
+        bitmap_set(numa_info[nodenr].node_cpu, cpus->value, 1);
     }
 
-    bitmap_set(numa_info[nodenr].node_cpu, value, endvalue-value+1);
-    return;
+    if (opts->has_mem) {
+        int64_t mem_size;
+        char *endptr;
+        mem_size = strtosz(opts->mem, &endptr);
+        if (mem_size < 0 || *endptr) {
+            fprintf(stderr, "qemu: invalid numa mem size: %s\n", opts->mem);
+            return -1;
+        }
+        numa_info[nodenr].node_mem = mem_size;
+    }
 
-error:
-    fprintf(stderr, "qemu: Invalid NUMA CPU range: %s\n", cpus);
-    exit(1);
+    return 0;
 }
 
-void numa_add(const char *optarg)
+int numa_init_func(QemuOpts *opts, void *opaque)
 {
-    char option[128];
-    char *endptr;
-    unsigned long long nodenr;
+    NumaOptions *object = NULL;
+    Error *err = NULL;
+    int ret = 0;
 
-    optarg = get_opt_name(option, 128, optarg, ',');
-    if (*optarg == ',') {
-        optarg++;
+    {
+        OptsVisitor *ov = opts_visitor_new(opts);
+        visit_type_NumaOptions(opts_get_visitor(ov), &object, NULL, &err);
+        opts_visitor_cleanup(ov);
     }
-    if (!strcmp(option, "node")) {
 
-        if (nb_numa_nodes >= MAX_NODES) {
-            fprintf(stderr, "qemu: too many NUMA nodes\n");
-            exit(1);
-        }
+    if (error_is_set(&err)) {
+        fprintf(stderr, "qemu: %s\n", error_get_pretty(err));
+        error_free(err);
+        ret = -1;
+        goto error;
+    }
 
-        if (get_param_value(option, 128, "nodeid", optarg) == 0) {
-            nodenr = nb_numa_nodes;
-        } else {
-            if (parse_uint_full(option, &nodenr, 10) < 0) {
-                fprintf(stderr, "qemu: Invalid NUMA nodeid: %s\n", option);
-                exit(1);
-            }
-        }
-
-        if (nodenr >= MAX_NODES) {
-            fprintf(stderr, "qemu: invalid NUMA nodeid: %llu\n", nodenr);
-            exit(1);
-        }
-
-        if (get_param_value(option, 128, "mem", optarg) == 0) {
-            numa_info[nodenr].node_mem = 0;
-        } else {
-            int64_t sval;
-            sval = strtosz(option, &endptr);
-            if (sval < 0 || *endptr) {
-                fprintf(stderr, "qemu: invalid numa mem size: %s\n", optarg);
-                exit(1);
-            }
-            numa_info[nodenr].node_mem = sval;
-        }
-        if (get_param_value(option, 128, "cpus", optarg) != 0) {
-            numa_node_parse_cpus(nodenr, option);
+    switch (object->kind) {
+    case NUMA_OPTIONS_KIND_NODE:
+        ret = numa_node_parse(object->node);
+        if (ret) {
+            goto error;
         }
         nb_numa_nodes++;
-    } else {
-        fprintf(stderr, "Invalid -numa option: %s\n", option);
-        exit(1);
+        break;
+    default:
+        fprintf(stderr, "qemu: Invalid NUMA options type.\n");
+        ret = -1;
     }
+
+error:
+    if (object) {
+        QapiDeallocVisitor *dv = qapi_dealloc_visitor_new();
+        visit_type_NumaOptions(qapi_dealloc_get_visitor(dv),
+                               &object, NULL, NULL);
+        qapi_dealloc_visitor_cleanup(dv);
+    }
+
+    return ret;
 }
 
 void set_numa_nodes(void)
