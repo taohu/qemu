@@ -591,3 +591,16 @@ out:
 
     return 0;
 }
+
+void qmp_object_del(const char *id, Error **errp)
+{
+    Object *obj;
+
+    obj = object_resolve_path_component(container_get(object_get_root(), "/objects"),
+                                        id);
+    if (!obj) {
+        error_setg(errp, "object id not found");
+        return;
+    }
+    object_unparent(obj);
+}

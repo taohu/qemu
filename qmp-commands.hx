@@ -904,6 +904,30 @@ Example:
 
 EQMP
 
+    {
+        .name       = "object-del",
+        .args_type  = "id:s",
+        .mhandler.cmd_new = qmp_marshal_input_object_del,
+    },
+
+SQMP
+object-del
+----------
+
+Remove QOM object.
+
+Arguments:
+
+- "id": the object's ID (json-string)
+
+Example:
+
+-> { "execute": "object-del", "arguments": { "id": "rng1" } }
+<- { "return": {} }
+
+
+EQMP
+
 
     {
         .name       = "block_resize",
