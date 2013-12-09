@@ -1243,6 +1243,20 @@ STEXI
 Remove host network device.
 ETEXI
 
+    {
+        .name       = "object_add",
+        .args_type  = "object:O",
+        .params     = "[qom-type=]type,id=str[,prop=value][,...]",
+        .help       = "create QOM object",
+        .mhandler.cmd = hmp_object_add,
+    },
+
+STEXI
+@item object_add
+@findex object_add
+Create QOM object.
+ETEXI
+
 #ifdef CONFIG_SLIRP
     {
         .name       = "hostfwd_add",

@@ -879,6 +879,33 @@ Example:
 EQMP
 
     {
+        .name       = "object-add",
+        .args_type  = "qom-type:s,id:s,props:q?",
+        .mhandler.cmd_new = qmp_object_add,
+    },
+
+SQMP
+object-add
+----------
+
+Create QOM object.
+
+Arguments:
+
+- "qom-type": the object's QOM type, i.e. the class name (json-string)
+- "id": the object's ID, must be unique (json-string)
+- "props": a dictionary of object property values (optional, json-dict)
+
+Example:
+
+-> { "execute": "object-add", "arguments": { "qom-type": "rng-random", "id": "rng1",
+     "props": { "filename": "/dev/hwrng" } } }
+<- { "return": {} }
+
+EQMP
+
+
+    {
         .name       = "block_resize",
         .args_type  = "device:B,size:o",
         .mhandler.cmd_new = qmp_marshal_input_block_resize,
