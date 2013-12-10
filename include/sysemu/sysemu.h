@@ -10,6 +10,8 @@
 #include "qemu/notify.h"
 #include "qemu/main-loop.h"
 #include "qemu/bitmap.h"
+#include "qom/object.h"
+#include "hw/boards.h"
 
 /* vl.c */
 
@@ -144,6 +146,9 @@ void set_numa_nodes(void);
 void set_numa_modes(void);
 extern QemuOptsList qemu_numa_opts;
 int numa_init_func(QemuOpts *opts, void *opaque);
+void memory_region_allocate_system_memory(MemoryRegion *mr, Object *owner,
+                                          const char *name,
+                                          QEMUMachineInitArgs *args);
 
 #define MAX_OPTION_ROMS 16
 typedef struct QEMUOptionRom {
