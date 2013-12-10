@@ -4256,7 +4256,10 @@
 #
 # @cpus: #optional VCPUs belong to this node
 #
-# @mem: #optional memory size of this node
+# @memdev: #optional memory backend object.  If specified for one node,
+#          it must be specified for all nodes.
+#
+# @mem: #optional memory size of this node; mutually exclusive with @memdev.
 #
 # Since: 2.0
 ##
@@ -4264,4 +4267,5 @@
   'data': {
    '*nodeid': 'uint16',
    '*cpus':   ['uint16'],
+   '*memdev': 'str',
    '*mem':    'str' }}
