@@ -3,6 +3,7 @@
 
 #include "qemu-common.h"
 #include "exec/memory.h"
+#include "hw/boards.h"
 #include "hw/isa/isa.h"
 #include "hw/block/fdc.h"
 #include "net/net.h"
@@ -140,10 +141,8 @@ static inline uint64_t pci_host_get_hole64_size(uint64_t pci_hole64_size)
 void pc_init_pci64_hole(PcPciInfo *pci_info, uint64_t pci_hole64_start,
                         uint64_t pci_hole64_size);
 
-FWCfgState *pc_memory_init(MemoryRegion *system_memory,
-                           const char *kernel_filename,
-                           const char *kernel_cmdline,
-                           const char *initrd_filename,
+FWCfgState *pc_memory_init(QEMUMachineInitArgs *args,
+                           MemoryRegion *system_memory,
                            ram_addr_t below_4g_mem_size,
                            ram_addr_t above_4g_mem_size,
                            MemoryRegion *rom_memory,
