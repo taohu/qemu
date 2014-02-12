@@ -4454,3 +4454,23 @@
    '*cpus':   ['uint16'],
    '*memdev': 'str',
    '*mem':    'str' }}
+
+##
+# @HostMemPolicy
+#
+# Host memory policy types
+#
+# @default: restore default policy, remove any nondefault policy
+#
+# @preferred: set the preferred host node for allocation
+#
+# @membind: a strict policy that restricts memory allocation to the
+#           host nodes specified
+#
+# @interleave: the page allocations is interleaved across the set
+#              of host nodes specified
+#
+# Since 2.0
+##
+{ 'enum': 'HostMemPolicy',
+  'data': [ 'default', 'preferred', 'membind', 'interleave' ] }
