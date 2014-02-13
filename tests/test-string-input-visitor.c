@@ -64,6 +64,25 @@ static void test_visitor_in_int(TestInputVisitorData *data,
     g_assert_cmpint(res, ==, value);
 }
 
+static void test_visitor_in_intList(TestInputVisitorData *data,
+                                    const void *unused)
+{
+    int64_t value[] = {-2, -1, 0, 1, 2, 3, 4};
+    int16List *res = NULL;
+    Error *errp = NULL;
+    Visitor *v;
+    int i = 0;
+
+    v = visitor_input_test_init(data, "-2-4");
+
+    visit_type_int16List(v, &res, NULL, &errp);
+    g_assert(!error_is_set(&errp));
+    while (res && i < sizeof(value) / sizeof(value[0])) {
+        g_assert_cmpint(res->value, ==, value[i++]);
+        res = res->next;
+    }
+}
+
 static void test_visitor_in_bool(TestInputVisitorData *data,
                                  const void *unused)
 {
@@ -228,6 +247,8 @@ int main(int argc, char **argv)
 
     input_visitor_test_add("/string-visitor/input/int",
                            &in_visitor_data, test_visitor_in_int);
+    input_visitor_test_add("/string-visitor/input/intList",
+                           &in_visitor_data, test_visitor_in_intList);
     input_visitor_test_add("/string-visitor/input/bool",
                            &in_visitor_data, test_visitor_in_bool);
     input_visitor_test_add("/string-visitor/input/number",
