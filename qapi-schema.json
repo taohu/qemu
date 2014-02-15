@@ -4323,3 +4323,9 @@
 ##
 { 'enum': 'HostMemPolicy',
   'data': [ 'default', 'preferred', 'membind', 'interleave' ] }
+
+{ 'type': 'MemdevOptions',
+  'data': {
+    'id': 'uint16',
+    'host-nodes': ['uint16'],
+    'policy': 'str' }}
