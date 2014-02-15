@@ -10,9 +10,89 @@
  * See the COPYING file in the top-level directory.
  */
 #include "sysemu/hostmem.h"
+#include "sysemu/sysemu.h"
+#include "qemu/bitmap.h"
+#include "qapi-visit.h"
+#include "qemu/config-file.h"
+#include "qapi/opts-visitor.h"
 
 #define TYPE_MEMORY_BACKEND_RAM "memory-ram"
+#define MEMORY_BACKEND_RAM(obj) \
+    OBJECT_CHECK(HostMemoryBackendRam, (obj), TYPE_MEMORY_BACKEND_RAM)
 
+typedef struct HostMemoryBackendRam HostMemoryBackendRam;
+
+/**
+ * @HostMemoryBackendRam
+ *
+ * @parent: opaque parent object container
+ * @host_nodes: host nodes bitmap used for memory policy
+ * @policy: host memory policy
+ * @relative: if the host nodes bitmap is relative
+ */
+struct HostMemoryBackendRam {
+    /* private */
+    HostMemoryBackend parent;
+
+    DECLARE_BITMAP(host_nodes, MAX_NODES);
+    HostMemPolicy policy;
+    bool relative;
+};
+
+static void
+get_host_nodes(Object *obj, Visitor *v, void *opaque, const char *name,
+               Error **errp)
+{
+    HostMemoryBackendRam *ram_backend = MEMORY_BACKEND_RAM(obj);
+    uint16List *host_nodes = NULL;
+    uint16List **node = &host_nodes;
+    unsigned long value;
+
+    value = find_first_bit(ram_backend->host_nodes, MAX_NODES);
+    if (value == MAX_NODES) {
+        return;
+    }
+
+    *node = g_malloc0(sizeof(**node));
+    (*node)->value = value;
+    node = &(*node)->next;
+
+    do {
+        value = find_next_bit(ram_backend->host_nodes, MAX_NODES, value + 1);
+        if (value == MAX_NODES) {
+            break;
+        }
+
+        *node = g_malloc0(sizeof(**node));
+        (*node)->value = value;
+        node = &(*node)->next;
+    } while (true);
+
+    visit_type_uint16List(v, &host_nodes, name, errp);
+}
+
+#if 0
+QemuOptsList qemu_memdev_opts = {
+    .name = "memdev-opts",
+    .head = QTAILQ_HEAD_INITIALIZER(qemu_memdev_opts.head),
+    .desc = { { 0 } }
+};
+#endif
+
+static void
+set_host_nodes(Object *obj, Visitor *v, void *opaque, const char *name,
+               Error **errp)
+{
+    HostMemoryBackendRam *ram_backend = MEMORY_BACKEND_RAM(obj);
+    uint16List * l = NULL;
+
+    visit_type_uint16List(v, &l, name, errp);
+
+    while (l) {
+        bitmap_set(ram_backend->host_nodes, l->value, 1);
+        l = l->next;
+    }
+}
 
 static void
 ram_backend_memory_init(HostMemoryBackend *backend, Error **errp)
@@ -22,6 +102,14 @@ ram_backend_memory_init(HostMemoryBackend *backend, Error **errp)
                                object_get_canonical_path(OBJECT(backend)),
                                backend->size);
     }
+}
+
+static void
+ram_backend_initfn(Object *obj)
+{
+    object_property_add(obj, "host-nodes", "int",
+                        get_host_nodes,
+                        set_host_nodes, NULL, NULL, NULL);
 }
 
 static void
@@ -36,6 +124,8 @@ static const TypeInfo ram_backend_info = {
     .name = TYPE_MEMORY_BACKEND_RAM,
     .parent = TYPE_MEMORY_BACKEND,
     .class_init = ram_backend_class_init,
+    .instance_size = sizeof(HostMemoryBackendRam),
+    .instance_init = ram_backend_initfn,
 };
 
 static void register_types(void)
