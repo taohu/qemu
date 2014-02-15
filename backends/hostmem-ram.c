@@ -94,6 +94,35 @@ set_host_nodes(Object *obj, Visitor *v, void *opaque, const char *name,
     }
 }
 
+static const char *policies[HOST_MEM_POLICY_MAX + 1] = {
+    [HOST_MEM_POLICY_DEFAULT] = "default",
+    [HOST_MEM_POLICY_PREFERRED] = "preferred",
+    [HOST_MEM_POLICY_MEMBIND] = "membind",
+    [HOST_MEM_POLICY_INTERLEAVE] = "interleave",
+    [HOST_MEM_POLICY_MAX] = NULL,
+};
+
+static void
+get_policy(Object *obj, Visitor *v, void *opaque, const char *name,
+           Error **errp)
+{
+    HostMemoryBackendRam *ram_backend = MEMORY_BACKEND_RAM(obj);
+    int policy = ram_backend->policy;
+
+    visit_type_enum(v, &policy, policies, NULL, name, errp);
+}
+
+static void
+set_policy(Object *obj, Visitor *v, void *opaque, const char *name,
+           Error **errp)
+{
+    HostMemoryBackendRam *ram_backend = MEMORY_BACKEND_RAM(obj);
+    int policy;
+
+    visit_type_enum(v, &policy, policies, NULL, name, errp);
+    ram_backend->policy = policy;
+}
+
 static void
 ram_backend_memory_init(HostMemoryBackend *backend, Error **errp)
 {
@@ -110,6 +139,9 @@ ram_backend_initfn(Object *obj)
     object_property_add(obj, "host-nodes", "int",
                         get_host_nodes,
                         set_host_nodes, NULL, NULL, NULL);
+    object_property_add(obj, "policy", "string",
+                        get_policy,
+                        set_policy, NULL, NULL, NULL);
 }
 
 static void
