@@ -123,13 +123,47 @@ set_policy(Object *obj, Visitor *v, void *opaque, const char *name,
     ram_backend->policy = policy;
 }
 
+#include <sys/syscall.h>
+#include <numaif.h>
+#ifndef MPOL_F_RELATIVE_NODES
+#define MPOL_F_RELATIVE_NODES (1 << 14)
+#define MPOL_F_STATIC_NODES   (1 << 15)
+#endif
+
 static void
 ram_backend_memory_init(HostMemoryBackend *backend, Error **errp)
 {
+    HostMemoryBackendRam *ram_backend = MEMORY_BACKEND_RAM(backend);
+    void *p;
+    unsigned long maxnode;
+    int mode;
+
+    switch (ram_backend->policy) {
+    case HOST_MEM_POLICY_PREFERRED:
+        mode = MPOL_PREFERRED;
+        break;
+    case HOST_MEM_POLICY_MEMBIND:
+        mode = MPOL_BIND;
+        break;
+    case HOST_MEM_POLICY_INTERLEAVE:
+        mode = MPOL_INTERLEAVE;
+        break;
+    default:
+        mode = MPOL_DEFAULT;
+        break;
+    }
+
     if (!memory_region_size(&backend->mr)) {
         memory_region_init_ram(&backend->mr, OBJECT(backend),
                                object_get_canonical_path(OBJECT(backend)),
                                backend->size);
+
+        p = memory_region_get_ram_ptr(&backend->mr);
+        maxnode = find_last_bit(ram_backend->host_nodes, MAX_NODES);
+
+        syscall(SYS_mbind, p, backend->size, mode,
+                ram_backend->host_nodes, maxnode + 2, 0);
+        perror("mbind");
     }
 }
 
