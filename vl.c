@@ -4167,8 +4167,9 @@ int main(int argc, char **argv, char **envp)
          * and distribute the available memory equally across all nodes
          */
         for (i = 0; i < nb_numa_nodes; i++) {
-            if (node_mem[i] != 0)
+            if (node_mem[i] != 0) {
                 break;
+            }
         }
         if (i == nb_numa_nodes) {
             uint64_t usedmem = 0;
