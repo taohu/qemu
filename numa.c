@@ -151,6 +151,16 @@ void set_numa_nodes(void)
             node_mem[i] = ram_size - usedmem;
         }
 
+        uint64_t numa_total = 0;
+        for (i = 0; i < nb_numa_nodes; i++) {
+            numa_total += node_mem[i];
+        }
+        if (numa_total != ram_size) {
+            fprintf(stderr, "qemu: numa nodes total memory size "
+                            "should equal ram_size\n");
+            exit(1);
+        }
+
         for (i = 0; i < nb_numa_nodes; i++) {
             if (!bitmap_empty(node_cpumask[i], MAX_CPUMASK_BITS)) {
                 break;
