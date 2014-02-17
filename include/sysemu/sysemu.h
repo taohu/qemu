@@ -132,7 +132,7 @@ extern size_t boot_splash_filedata_size;
 extern uint8_t qemu_extra_params_fw[2];
 extern QEMUClockType rtc_clock;
 
-#define MAX_NODES 64
+#define MAX_NODES 128
 #define MAX_CPUMASK_BITS 255
 extern int nb_numa_nodes;
 typedef struct node_info {
