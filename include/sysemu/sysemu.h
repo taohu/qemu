@@ -152,6 +152,8 @@ void memory_region_allocate_system_memory(MemoryRegion *mr, Object *owner,
                                           const char *name,
                                           QEMUMachineInitArgs *args);
 
+extern QemuOptsList qemu_memdev_opts;
+
 #define MAX_OPTION_ROMS 16
 typedef struct QEMUOptionRom {
     const char *name;
