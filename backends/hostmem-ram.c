@@ -15,6 +15,7 @@
 #include "qapi-visit.h"
 #include "qemu/config-file.h"
 #include "qapi/opts-visitor.h"
+#include "qmp-commands.h"
 
 #define TYPE_MEMORY_BACKEND_RAM "memory-ram"
 #define MEMORY_BACKEND_RAM(obj) \
@@ -37,7 +38,65 @@ struct HostMemoryBackendRam {
     DECLARE_BITMAP(host_nodes, MAX_NODES);
     HostMemPolicy policy;
     bool relative;
+
+    QTAILQ_ENTRY(HostMemoryBackendRam) next;
 };
+
+static const char *policies[HOST_MEM_POLICY_MAX + 1] = {
+    [HOST_MEM_POLICY_DEFAULT] = "default",
+    [HOST_MEM_POLICY_PREFERRED] = "preferred",
+    [HOST_MEM_POLICY_MEMBIND] = "membind",
+    [HOST_MEM_POLICY_INTERLEAVE] = "interleave",
+    [HOST_MEM_POLICY_MAX] = NULL,
+};
+
+static GSList *memdevs;
+
+static void func(gpointer data, gpointer user_data)
+{
+    HostMemoryBackendRam *backend = data;
+    MemdevList **list = user_data;
+    MemdevList *m;
+    uint16List **node;
+    unsigned long value;
+
+    m = g_malloc0(sizeof(*m));
+    m->value = g_malloc0(sizeof(*m->value));
+    m->value->policy = g_strdup(policies[backend->policy]);
+    m->value->relative = backend->relative;
+
+    node = &m->value->host_nodes;
+
+    value = find_first_bit(backend->host_nodes, MAX_NODES);
+    if (value < MAX_NODES) {
+        *node = g_malloc0(sizeof(**node));
+        (*node)->value = value;
+        node = &(*node)->next;
+
+        do {
+            value = find_next_bit(backend->host_nodes, MAX_NODES, value + 1);
+            if (value == MAX_NODES) {
+                break;
+            }
+
+            *node = g_malloc0(sizeof(**node));
+            (*node)->value = value;
+            node = &(*node)->next;
+        } while (true);
+    }
+
+    m->next = *list;
+    *list = m;
+}
+
+MemdevList *qmp_query_memdev(Error **errp)
+{
+    MemdevList *list = NULL;
+
+    g_slist_foreach(memdevs, func, &list);
+
+    return list;
+}
 
 static void
 get_host_nodes(Object *obj, Visitor *v, void *opaque, const char *name,
@@ -85,14 +144,6 @@ set_host_nodes(Object *obj, Visitor *v, void *opaque, const char *name,
         l = l->next;
     }
 }
-
-static const char *policies[HOST_MEM_POLICY_MAX + 1] = {
-    [HOST_MEM_POLICY_DEFAULT] = "default",
-    [HOST_MEM_POLICY_PREFERRED] = "preferred",
-    [HOST_MEM_POLICY_MEMBIND] = "membind",
-    [HOST_MEM_POLICY_INTERLEAVE] = "interleave",
-    [HOST_MEM_POLICY_MAX] = NULL,
-};
 
 static void
 get_policy(Object *obj, Visitor *v, void *opaque, const char *name,
@@ -164,6 +215,8 @@ ram_backend_memory_init(HostMemoryBackend *backend, Error **errp)
 static void
 ram_backend_initfn(Object *obj)
 {
+    HostMemoryBackendRam *ram_backend = MEMORY_BACKEND_RAM(obj);
+
     object_property_add(obj, "host-nodes", "int",
                         get_host_nodes,
                         set_host_nodes, NULL, NULL, NULL);
@@ -172,6 +225,8 @@ ram_backend_initfn(Object *obj)
                         set_policy, NULL, NULL, NULL);
     object_property_add_bool(obj, "relative",
                              get_relative, set_relative, NULL);
+
+    memdevs = g_slist_append(memdevs, ram_backend);
 }
 
 static void

@@ -3457,3 +3457,33 @@ Example:
                    } } ] }
 
 EQMP
+
+    {
+        .name       = "query-memdev",
+        .args_type  = "",
+        .mhandler.cmd_new = qmp_marshal_input_query_memdev,
+    },
+
+SQMP
+query-memdev
+------------
+
+Show memory devices information.
+
+
+Example (1):
+
+-> { "execute": "query-memdev" }
+<- { "return": [
+       {
+         "host-nodes": [0, 1],
+         "policy": "bind"
+       },
+       {
+         "host-nodes": [2, 3],
+         "policy": "preferred"
+       }
+     ]
+   }
+
+EQMP

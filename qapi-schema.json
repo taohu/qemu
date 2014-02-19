@@ -4474,3 +4474,34 @@
 ##
 { 'enum': 'HostMemPolicy',
   'data': [ 'default', 'preferred', 'membind', 'interleave' ] }
+
+##
+# @Memdev:
+#
+# Information of memory device
+#
+# @id: memory device id
+#
+# @host-nodes: host nodes for its memory policy
+#
+# @policy: memory policy of memory device
+#
+# Since: 2.0
+##
+
+{ 'type': 'Memdev',
+  'data': {
+    'host-nodes': ['uint16'],
+    'policy': 'str',
+    'relative': 'bool' }}
+
+##
+# @query-memdev:
+#
+# Returns information for all memory devices.
+#
+# Returns: a list of @Memdev.
+#
+# Since: 2.0
+##
+{ 'command': 'query-memdev', 'returns': ['Memdev'] }
