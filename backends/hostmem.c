@@ -18,6 +18,7 @@
 #ifdef CONFIG_NUMA
 #include <numaif.h>
 #endif
+#include "qmp-commands.h"
 
 static void
 hostmemory_backend_get_size(Object *obj, Visitor *v, void *opaque,

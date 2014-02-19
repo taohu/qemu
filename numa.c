@@ -28,7 +28,11 @@
 #include "qapi-visit.h"
 #include "qapi/opts-visitor.h"
 #include "qapi/dealloc-visitor.h"
+#include "qapi/string-output-visitor.h"
+#include "qapi/string-input-visitor.h"
 #include "qapi/qmp/qerror.h"
+#include "qmp-commands.h"
+
 
 QemuOptsList qemu_numa_opts = {
     .name = "numa",
@@ -259,3 +263,60 @@ void memory_region_allocate_system_memory(MemoryRegion *mr, Object *owner,
         addr += size;
     }
 }
+
+MemdevList *qmp_query_memdev(Error **errp)
+{
+    StringOutputVisitor *ov = string_output_visitor_new(false);
+    StringInputVisitor *iv;
+    MemdevList *list = NULL, *m;
+    HostMemoryBackend *backend;
+    Error *err = NULL;
+    int i;
+
+    for (i = 0; i < nb_numa_nodes; i++) {
+        backend = numa_info[i].node_memdev;
+
+        m = g_malloc0(sizeof(*m));
+        m->value = g_malloc0(sizeof(*m->value));
+        m->value->size = object_property_get_int(OBJECT(backend), "size",
+                                                 &err);
+        if (err) {
+            goto error;
+        }
+        m->value->policy = object_property_get_str(OBJECT(backend), "policy",
+                                                   &err);
+        if (err) {
+            goto error;
+        }
+        object_property_get(OBJECT(backend), string_output_get_visitor(ov),
+                            "host-nodes", &err);
+        if (err) {
+            goto error;
+        }
+        iv = string_input_visitor_new(string_output_get_string(ov));
+        visit_type_uint16List(string_input_get_visitor(iv),
+                              &m->value->host_nodes, NULL, &err);
+        if (err) {
+            string_input_visitor_cleanup(iv);
+            goto error;
+        }
+
+        m->next = list;
+        list = m;
+        string_input_visitor_cleanup(iv);
+    }
+
+    string_output_visitor_cleanup(ov);
+
+    return list;
+error:
+    while (list) {
+        m = list;
+        list = list->next;
+        g_free(m->value);
+        g_free(m);
+    }
+    qerror_report_err(err);
+    return NULL;
+}
+
