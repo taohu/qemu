@@ -57,6 +57,30 @@ static void test_visitor_out_int(TestOutputVisitorData *data,
     g_free(str);
 }
 
+static void test_visitor_out_intList(TestOutputVisitorData *data,
+                                     const void *unused)
+{
+    int64_t value[] = {-2, -1, 0, 1, 2, 3, 4};
+    intList *list = NULL, **tmp = &list;
+    int i;
+    Error *errp = NULL;
+    char *str;
+
+    for (i = 0; i < sizeof(value) / sizeof(value[0]); i++) {
+        *tmp = g_malloc0(sizeof(**tmp));
+        (*tmp)->value = value[i];
+        tmp = &(*tmp)->next;
+    }
+
+    visit_type_intList(data->ov, &list, NULL, &errp);
+    g_assert(error_is_set(&errp) == 0);
+
+    str = string_output_get_string(data->sov);
+    g_assert(str != NULL);
+    g_assert_cmpstr(str, ==, "-2-4");
+    g_free(str);
+}
+
 static void test_visitor_out_bool(TestOutputVisitorData *data,
                                   const void *unused)
 {
@@ -182,6 +206,8 @@ int main(int argc, char **argv)
                             &out_visitor_data, test_visitor_out_enum);
     output_visitor_test_add("/string-visitor/output/enum-errors",
                             &out_visitor_data, test_visitor_out_enum_errors);
+    output_visitor_test_add("/string-visitor/output/intList",
+                            &out_visitor_data, test_visitor_out_intList);
 
     g_test_run();
 
