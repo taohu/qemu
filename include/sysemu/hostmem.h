@@ -12,10 +12,12 @@
 #ifndef QEMU_RAM_H
 #define QEMU_RAM_H
 
+#include "sysemu/sysemu.h" /* for MAX_NODES */
 #include "qom/object.h"
 #include "qapi/error.h"
 #include "exec/memory.h"
 #include "qemu/option.h"
+#include "qemu/bitmap.h"
 
 #define TYPE_MEMORY_BACKEND "memory"
 #define MEMORY_BACKEND(obj) \
@@ -50,6 +52,8 @@ struct HostMemoryBackend {
 
     /* protected */
     uint64_t size;
+    DECLARE_BITMAP(host_nodes, MAX_NODES);
+    HostMemPolicy policy;
 
     MemoryRegion mr;
 };
