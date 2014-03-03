@@ -2966,6 +2966,13 @@ static mon_cmd_t info_cmds[] = {
         .mhandler.cmd = hmp_info_tpm,
     },
     {
+        .name       = "memdev",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show the memory device",
+        .mhandler.cmd = hmp_info_memdev,
+    },
+    {
         .name       = NULL,
     },
 };
