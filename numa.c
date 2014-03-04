@@ -24,9 +24,12 @@
  */
 
 #include "sysemu/sysemu.h"
+#include "sysemu/hostmem.h"
 #include "qapi-visit.h"
 #include "qapi/opts-visitor.h"
 #include "qapi/dealloc-visitor.h"
+#include "qapi/qmp/qerror.h"
+
 QemuOptsList qemu_numa_opts = {
     .name = "numa",
     .implied_opt_name = "type",
@@ -34,10 +37,13 @@ QemuOptsList qemu_numa_opts = {
     .desc = { { 0 } } /* validated with OptsVisitor */
 };
 
+static int have_memdevs = -1;
+
 static int numa_node_parse(NumaNodeOptions *node, QemuOpts *opts)
 {
     uint16_t nodenr;
     uint16List *cpus = NULL;
+    Error *local_err = NULL;
 
     if (node->has_nodeid) {
         nodenr = node->nodeid;
@@ -60,6 +66,20 @@ static int numa_node_parse(NumaNodeOptions *node, QemuOpts *opts)
         bitmap_set(numa_info[nodenr].node_cpu, cpus->value, 1);
     }
 
+    if (node->has_mem && node->has_memdev) {
+        fprintf(stderr, "qemu: cannot specify both mem= and memdev=\n");
+        return -1;
+    }
+
+    if (have_memdevs == -1) {
+        have_memdevs = node->has_memdev;
+    }
+
+    if (node->has_memdev != have_memdevs) {
+        fprintf(stderr, "qemu: memdev option must be specified for either "
+                "all or no nodes\n");
+    }
+
     if (node->has_mem) {
         uint64_t mem_size = node->mem;
         const char *mem_str = qemu_opt_get(opts, "mem");
@@ -69,7 +89,19 @@ static int numa_node_parse(NumaNodeOptions *node, QemuOpts *opts)
         }
         numa_info[nodenr].node_mem = mem_size;
     }
+    if (node->has_memdev) {
+        Object *o;
+        o = object_resolve_path_type(node->memdev, TYPE_MEMORY_BACKEND, NULL);
+        if (!o) {
+            error_setg(&local_err, "memdev=%s is ambiguous", node->memdev);
+            qerror_report_err(local_err);
+            return -1;
+        }
 
+        object_ref(o);
+        numa_info[nodenr].node_mem = object_property_get_int(o, "size", NULL);
+        numa_info[nodenr].node_memdev = MEMORY_BACKEND(o);
+    }
     return 0;
 }
 
@@ -188,12 +220,42 @@ void set_numa_modes(void)
     }
 }
 
-void memory_region_allocate_system_memory(MemoryRegion *mr, Object *owner,
-                                          const char *name,
-                                          QEMUMachineInitArgs *args)
+static void allocate_system_memory_nonnuma(MemoryRegion *mr, Object *owner,
+                                           const char *name,
+                                           QEMUMachineInitArgs *args)
 {
     uint64_t ram_size = args->ram_size;
 
     memory_region_init_ram(mr, owner, name, ram_size);
     vmstate_register_ram_global(mr);
+}
+
+void memory_region_allocate_system_memory(MemoryRegion *mr, Object *owner,
+                                          const char *name,
+                                          QEMUMachineInitArgs *args)
+{
+    uint64_t ram_size = args->ram_size;
+    uint64_t addr = 0;
+    int i;
+
+    if (nb_numa_nodes == 0 || !have_memdevs) {
+        allocate_system_memory_nonnuma(mr, owner, name, args);
+        return;
+    }
+
+    memory_region_init(mr, owner, name, ram_size);
+    for (i = 0; i < nb_numa_nodes; i++) {
+        Error *local_err = NULL;
+        uint64_t size = numa_info[i].node_mem;
+        HostMemoryBackend *backend = numa_info[i].node_memdev;
+        MemoryRegion *seg = host_memory_backend_get_memory(backend, &local_err);
+        if (local_err) {
+            qerror_report_err(local_err);
+            exit(1);
+        }
+
+        memory_region_add_subregion(mr, addr, seg);
+        vmstate_register_ram_global(seg);
+        addr += size;
+    }
 }
