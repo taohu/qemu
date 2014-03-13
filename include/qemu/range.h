@@ -167,11 +167,13 @@ static inline void range_list_add(SignedRangeList *list,
         QTAILQ_INSERT_BEFORE(cur, new, entry);
     } else {
         s_range_free(new);
-        SignedRange **tmp = &QTAILQ_NEXT(r, entry);
-        while (*tmp && s_range_overlap(r->start, r->length,
-                                       (*tmp)->start, (*tmp)->length)) {
-                s_range_join(r, (*tmp)->start, (*tmp)->length);
-                QTAILQ_REMOVE(list, *tmp, entry);
+        SignedRange *next = QTAILQ_NEXT(r, entry);
+        while (next && s_range_overlap(r->start, r->length,
+                                       next->start, next->length)) {
+            s_range_join(r, next->start, next->length);
+            QTAILQ_REMOVE(list, next, entry);
+            s_range_free(next);
+            next = QTAILQ_NEXT(r, entry);
         }
     }
 }
