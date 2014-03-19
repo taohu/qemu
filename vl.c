@@ -2899,6 +2899,7 @@ int main(int argc, char **argv, char **envp)
     qemu_add_opts(&qemu_realtime_opts);
     qemu_add_opts(&qemu_msg_opts);
     qemu_add_opts(&qemu_name_opts);
+    qemu_add_opts(&qemu_numa_opts);
 
     runstate_init();
 
@@ -3096,7 +3097,10 @@ int main(int argc, char **argv, char **envp)
                 }
                 break;
             case QEMU_OPTION_numa:
-                numa_add(optarg);
+                opts = qemu_opts_parse(qemu_find_opts("numa"), optarg, 1);
+                if (!opts) {
+                    exit(1);
+                }
                 break;
             case QEMU_OPTION_display:
                 display_type = select_display(optarg);
@@ -4188,6 +4192,11 @@ int main(int argc, char **argv, char **envp)
     default_drive(default_sdcard, snapshot, IF_SD, 0, SD_OPTS);
 
     register_savevm_live(NULL, "ram", 0, 4, &savevm_ram_handlers, NULL);
+
+    if (qemu_opts_foreach(qemu_find_opts("numa"), numa_init_func,
+                          NULL, 1) != 0) {
+        exit(1);
+    }
 
     set_numa_nodes();
 
