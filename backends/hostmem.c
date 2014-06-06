@@ -298,26 +298,34 @@ host_memory_backend_memory_init(UserCreatable *uc, Error **errp)
             qemu_madvise(ptr, sz, QEMU_MADV_DONTDUMP);
         }
 #ifdef CONFIG_NUMA
-        unsigned long maxnode = find_last_bit(backend->host_nodes, MAX_NODES);
+        unsigned long lastbit = find_last_bit(backend->host_nodes, MAX_NODES);
+        /* lastbit == MAX_NODES means maxnode = 0 */
+        unsigned long maxnode = (lastbit + 1) % (MAX_NODES + 1);
+        /* ensure policy won't be ignored in case memory is preallocated
+         * before mbind(). note: MPOL_MF_STRICT is ignored on hugepages so
+         * this doesn't catch hugepage case. */
+        unsigned flags = MPOL_MF_STRICT | MPOL_MF_MOVE;
 
         /* check for invalid host-nodes and policies and give more verbose
          * error messages than mbind(). */
-        if (maxnode != MAX_NODES && backend->policy == MPOL_DEFAULT) {
+        if (maxnode && backend->policy == MPOL_DEFAULT) {
             error_setg(errp, "host-nodes must be empty for policy default,"
                        " or you should explicitly specify a policy other"
                        " than default");
             return;
-        } else if (maxnode == MAX_NODES && backend->policy != MPOL_DEFAULT) {
+        } else if (maxnode == 0 && backend->policy != MPOL_DEFAULT) {
             error_setg(errp, "host-nodes must be set for policy %s",
                        HostMemPolicy_lookup[backend->policy]);
             return;
         }
 
-        /* This is a workaround for a long standing bug in Linux'
-         * mbind implementation, which cuts off the last specified
-         * node.
+        /* We can have up to MAX_NODES nodes, but we need to pass maxnode+1
+         * as argument to mbind() due to an old Linux bug (feature?) which
+         * cuts off the last specified node. This means backend->host_nodes
+         * must have MAX_NODES+1 bits available.
          */
-        if (mbind(ptr, sz, backend->policy, backend->host_nodes, maxnode + 2, 0)) {
+        if (mbind(ptr, sz, backend->policy, maxnode ? backend->host_nodes : NULL,
+                  maxnode + 1, flags)) {
             error_setg_errno(errp, errno,
                              "cannot bind memory to host NUMA nodes");
             return;
