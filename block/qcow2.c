@@ -1593,6 +1593,9 @@ static int preallocate(BlockDriverState *bs)
     return 0;
 }
 
+static uint64_t minimal_blob_size(uint64_t ts, int cb, int spcb,
+                                  uint64_t overhead);
+
 static int qcow2_create2(const char *filename, int64_t total_size,
                          const char *backing_file, const char *backing_format,
                          int flags, size_t cluster_size, PreallocMode prealloc,
@@ -1627,6 +1630,29 @@ static int qcow2_create2(const char *filename, int64_t total_size,
     uint64_t* refcount_table;
     Error *local_err = NULL;
     int ret;
+
+    if (prealloc == PREALLOC_MODE_FULL || prealloc == PREALLOC_MODE_FALLOC) {
+        int64_t meta_size = 0;
+        unsigned nl2e;
+
+        total_size = align_offset(total_size, cluster_size);
+
+        /* total size of L2 tables */
+        nl2e = total_size / cluster_size;
+        nl2e = align_offset(nl2e, cluster_size / sizeof(uint64_t));
+        uint64_t l2_clusters = nl2e * sizeof(uint64_t) >> cluster_bits;
+
+        meta_size =
+            (1 +
+             minimal_blob_size(total_size / BDRV_SECTOR_SIZE,
+                               cluster_bits, cluster_bits - BDRV_SECTOR_BITS,
+                               1 + l2_clusters +
+                               (total_size >> cluster_bits)) +
+             l2_clusters) << cluster_bits;
+
+        qemu_opt_set_number(opts, BLOCK_OPT_SIZE, total_size + meta_size);
+        qemu_opt_set(opts, BLOCK_OPT_PREALLOC, PreallocMode_lookup[prealloc]);
+    }
 
     ret = bdrv_create_file(filename, opts, &local_err);
     if (ret < 0) {
@@ -2760,7 +2786,8 @@ static QemuOptsList qcow2_create_opts = {
         {
             .name = BLOCK_OPT_PREALLOC,
             .type = QEMU_OPT_STRING,
-            .help = "Preallocation mode (allowed values: off, metadata)"
+            .help = "Preallocation mode (allowed values: off, metadata, "
+                    "falloc, full)"
         },
         {
             .name = BLOCK_OPT_LAZY_REFCOUNTS,
