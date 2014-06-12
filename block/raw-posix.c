@@ -1282,8 +1282,8 @@ static int raw_create(const char *filename, QemuOpts *opts, Error **errp)
     strstart(filename, "file:", &filename);
 
     /* Read out options */
-    total_size = DIV_ROUND_UP(qemu_opt_get_size_del(opts, BLOCK_OPT_SIZE, 0),
-                              BDRV_SECTOR_SIZE);
+    total_size = ROUND_UP(qemu_opt_get_size_del(opts, BLOCK_OPT_SIZE, 0),
+                          BDRV_SECTOR_SIZE);
 
     fd = qemu_open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY,
                    0644);
@@ -1291,7 +1291,7 @@ static int raw_create(const char *filename, QemuOpts *opts, Error **errp)
         result = -errno;
         error_setg_errno(errp, -result, "Could not create file");
     } else {
-        if (ftruncate(fd, total_size * BDRV_SECTOR_SIZE) != 0) {
+        if (ftruncate(fd, total_size) != 0) {
             result = -errno;
             error_setg_errno(errp, -result, "Could not resize file");
         }
