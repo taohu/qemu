@@ -30,6 +30,7 @@
 #include "qemu/error-report.h"
 #include "qapi/qmp/qerror.h"
 #include "qapi/qmp/qbool.h"
+#include "qapi/util.h"
 #include "trace.h"
 #include "qemu/option_int.h"
 
@@ -1594,7 +1595,7 @@ static int preallocate(BlockDriverState *bs)
 
 static int qcow2_create2(const char *filename, int64_t total_size,
                          const char *backing_file, const char *backing_format,
-                         int flags, size_t cluster_size, int prealloc,
+                         int flags, size_t cluster_size, PreallocMode prealloc,
                          QemuOpts *opts, int version,
                          Error **errp)
 {
@@ -1771,7 +1772,7 @@ static int qcow2_create(const char *filename, QemuOpts *opts, Error **errp)
     uint64_t size = 0;
     int flags = 0;
     size_t cluster_size = DEFAULT_CLUSTER_SIZE;
-    int prealloc = 0;
+    PreallocMode prealloc = PREALLOC_MODE_OFF;
     int version = 3;
     Error *local_err = NULL;
     int ret;
@@ -1787,12 +1788,11 @@ static int qcow2_create(const char *filename, QemuOpts *opts, Error **errp)
     cluster_size = qemu_opt_get_size_del(opts, BLOCK_OPT_CLUSTER_SIZE,
                                          DEFAULT_CLUSTER_SIZE);
     buf = qemu_opt_get_del(opts, BLOCK_OPT_PREALLOC);
-    if (!buf || !strcmp(buf, "off")) {
-        prealloc = 0;
-    } else if (!strcmp(buf, "metadata")) {
-        prealloc = 1;
-    } else {
-        error_setg(errp, "Invalid preallocation mode: '%s'", buf);
+    prealloc = qapi_enum_parse(PreallocMode_lookup, buf,
+                               PREALLOC_MODE_MAX, PREALLOC_MODE_OFF,
+                               &local_err);
+    if (local_err) {
+        error_propagate(errp, local_err);
         ret = -EINVAL;
         goto finish;
     }
