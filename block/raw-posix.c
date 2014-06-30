@@ -1332,8 +1332,8 @@ static int raw_create(const char *filename, QemuOpts *opts, Error **errp)
     strstart(filename, "file:", &filename);
 
     /* Read out options */
-    total_size =
-        qemu_opt_get_size_del(opts, BLOCK_OPT_SIZE, 0) / BDRV_SECTOR_SIZE;
+    total_size = DIV_ROUND_UP(qemu_opt_get_size_del(opts, BLOCK_OPT_SIZE, 0),
+                              BDRV_SECTOR_SIZE);
     nocow = qemu_opt_get_bool(opts, BLOCK_OPT_NOCOW, false);
 
     fd = qemu_open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY,
