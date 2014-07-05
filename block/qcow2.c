@@ -2010,27 +2010,386 @@ fail:
     return ret;
 }
 
+/*
+ * Creates a reftable pointing to refblocks following right afterwards and an
+ * empty L1 table at the given @offset. @refblocks is the number of refblocks
+ * to create.
+ *
+ * This combination of structures (reftable+refblocks+L1) is here called a
+ * "blob".
+ */
+static int create_refcount_l1(BlockDriverState *bs, uint64_t offset,
+                              uint64_t refblocks)
+{
+    BDRVQcowState *s = bs->opaque;
+    uint64_t *reftable = NULL;
+    uint16_t *refblock = NULL;
+    uint64_t reftable_clusters;
+    uint64_t rbi;
+    uint64_t blob_start, blob_end;
+    uint64_t l2_tables, l1_clusters, l1_size2;
+    uint8_t l1_size_and_offset[12];
+    uint64_t rt_offset;
+    int ret, i;
+
+    reftable_clusters = DIV_ROUND_UP(refblocks, s->cluster_size / 8);
+    l2_tables = DIV_ROUND_UP(bs->total_sectors / s->cluster_sectors,
+                             s->cluster_size / 8);
+    l1_clusters = DIV_ROUND_UP(l2_tables, s->cluster_size / 8);
+    l1_size2 = l1_clusters << s->cluster_bits;
+
+    blob_start = offset;
+    blob_end = offset + ((reftable_clusters + refblocks + l1_clusters) <<
+                s->cluster_bits);
+
+    ret = qcow2_pre_write_overlap_check(bs, 0, blob_start,
+                                        blob_end - blob_start);
+    if (ret < 0) {
+        return ret;
+    }
+
+    /* Create the reftable pointing with entries pointing consecutively to the
+     * following clusters */
+    reftable = g_malloc0_n(reftable_clusters, s->cluster_size);
+
+    for (rbi = 0; rbi < refblocks; rbi++) {
+        reftable[rbi] = cpu_to_be64(offset + ((reftable_clusters + rbi) <<
+                        s->cluster_bits));
+    }
+
+    ret = bdrv_write(bs->file, offset >> BDRV_SECTOR_BITS, (uint8_t *)reftable,
+                     reftable_clusters * s->cluster_sectors);
+    if (ret < 0) {
+        goto out;
+    }
+
+    offset += reftable_clusters << s->cluster_bits;
+
+    /* Keep the reftable, as we will need it for the BDRVQcowState anyway */
+
+    /* Now, create all the refblocks */
+    refblock = g_malloc(s->cluster_size);
+
+    for (rbi = 0; rbi < refblocks; rbi++) {
+        for (i = 0; i < s->cluster_size / 2; i++) {
+            uint64_t cluster_offset = ((rbi << (s->cluster_bits - 1)) + i)
+                                      << s->cluster_bits;
+
+            /* Only 0 and 1 are possible as refcounts here */
+            refblock[i] = cpu_to_be16(!cluster_offset ||
+                                      (cluster_offset >= blob_start &&
+                                       cluster_offset <  blob_end));
+        }
+
+        ret = bdrv_write(bs->file, offset >> BDRV_SECTOR_BITS,
+                         (uint8_t *)refblock, s->cluster_sectors);
+        if (ret < 0) {
+            goto out;
+        }
+
+        offset += s->cluster_size;
+    }
+
+    g_free(refblock);
+    refblock = NULL;
+
+    /* The L1 table is very simple */
+    ret = bdrv_write_zeroes(bs->file, offset >> BDRV_SECTOR_BITS,
+                            l1_clusters * s->cluster_sectors,
+                            BDRV_REQ_MAY_UNMAP);
+    if (ret < 0) {
+        goto out;
+    }
+
+    /* Now make sure all changes are stable and clear all caches */
+    bdrv_flush(bs);
+
+    /* This is probably not really necessary, but it cannot hurt, either */
+    ret = qcow2_mark_clean(bs);
+    if (ret < 0) {
+        goto out;
+    }
+
+    ret = qcow2_cache_empty(bs, s->l2_table_cache);
+    if (ret < 0) {
+        goto out;
+    }
+
+    ret = qcow2_cache_empty(bs, s->refcount_block_cache);
+    if (ret < 0) {
+        goto out;
+    }
+
+    /* Modify the image header to point to the new blank L1 table. This will
+     * leak all currently existing data clusters, which is fine. */
+    BLKDBG_EVENT(bs->file, BLKDBG_L1_UPDATE);
+
+    assert(l1_size2 / 8 <= UINT32_MAX);
+    cpu_to_be32w((uint32_t *)&l1_size_and_offset[0], l1_size2 / 8);
+    cpu_to_be64w((uint64_t *)&l1_size_and_offset[4], offset);
+    ret = bdrv_pwrite_sync(bs->file, offsetof(QCowHeader, l1_size),
+                           l1_size_and_offset, sizeof(l1_size_and_offset));
+    if (ret < 0) {
+        goto out;
+    }
+
+    /* Adapt the in-memory L1 table accordingly */
+    s->l1_table_offset = offset;
+    s->l1_size         = l1_size2 / 8;
+
+    s->l1_table = g_realloc(s->l1_table, l1_size2);
+    memset(s->l1_table, 0, l1_size2);
+
+    /* Modify the image header to point to the refcount table. This will fix all
+     * leaks (unless an error occurs). */
+    BLKDBG_EVENT(bs->file, BLKDBG_REFTABLE_UPDATE);
+
+    rt_offset = cpu_to_be64(blob_start);
+    ret = bdrv_pwrite_sync(bs->file,
+                           offsetof(QCowHeader, refcount_table_offset),
+                           &rt_offset, sizeof(rt_offset));
+    if (ret < 0) {
+        goto out;
+    }
+
+    /* The image is now clean. The only thing left is to adapt the in-memory
+     * refcount table to match it. */
+    s->refcount_table_offset = blob_start;
+    s->refcount_table_size   = reftable_clusters << (s->cluster_bits - 3);
+
+    for (rbi = 0; rbi < refblocks; rbi++) {
+        be64_to_cpus(&reftable[rbi]);
+    }
+
+    g_free(s->refcount_table);
+    s->refcount_table = reftable;
+    reftable = NULL;
+
+out:
+    g_free(refblock);
+    g_free(reftable);
+    return ret;
+}
+
+/*
+ * Calculates the number of clusters required for an L1 table for an image with
+ * the given parameters plus the reftable and the refblocks required to cover
+ * themselves, the L1 table and a given number of clusters @overhead.
+ *
+ * @ts:       Total number of guest sectors the image provides
+ * @cb:       1 << @cb is the cluster size in bytes
+ * @spcb:     1 << @spcb is the number of clusters per sector
+ * @overhead: Number of clusters which shall additionally be covered by the
+ *            refcount structures
+ */
+static uint64_t minimal_blob_size(uint64_t ts, int cb, int spcb,
+                                  uint64_t overhead)
+{
+    uint64_t cs  = UINT64_C(1) << cb;
+    uint64_t spc = UINT64_C(1) << spcb;
+
+    /* The following statement is a solution for this system of equations:
+     *
+     * Let req_cls be the required number of clusters required for the reftable,
+     * all refblocks and the L1 table.
+     *
+     * rtc be the clusters required for the reftable, rbc the clusters for all
+     * refblocks (i.e., the number of refblocks), l1c the clusters for the L1
+     * table and l2c the clusters for all L2 tables (i.e., the number of L2
+     * tables).
+     *
+     * cs be the cluster size (in bytes), ts the total number of sectors, spc
+     * the number of sectors per cluster and tc the total number of clusters.
+     *
+     * overhead is a number of clusters which should additionally be covered by
+     * the refcount structures (i.e. all clusters before this blob of req_cls
+     * clusters).
+     *
+     * req_cls >= rtc + rbc + l1c
+     *   -- should be obvious
+     * rbc      = ceil((overhead + req_cls) / (cs / 2))
+     *   -- as each refblock holds cs/2 entries
+     * rtc      = ceil(rbc                  / (cs / 8))
+     *   -- as each reftable cluster holds cs/8 entries
+     * tc       = ceil(ts / spc)
+     *   -- should be obvious as well
+     * l2c      = ceil(tc  / (cs / 8))
+     *   -- as each L2 table holds cs/8 entries
+     * l1c      = ceil(l2c / (cs / 8))
+     *   -- as each L1 table cluster holds cs/8 entries
+     *
+     * The following equation yields a result which satisfies the constraint.
+     * The result may be too high, but is never too low.
+     *
+     * The original calculation (without bitshifting) was:
+     *
+     * DIV_ROUND_UP(overhead * (1 + cs / 8) +
+     *              3 * cs * cs / 16 - 5 * cs / 8 - 1 +
+     *              4 * (ts + spc * cs / 8 - 1) / spc,
+     *              cs * cs / 16 - cs / 8 - 1)
+     *
+     */
+
+    return DIV_ROUND_UP(overhead + (overhead << (cb - 3)) +
+                        (3 << (2 * cb - 4)) - (5 << (cb - 3)) - 1 +
+                        (4 * (ts + (spc << (cb - 3)) - 1) >> spcb),
+                        (1 << (2 * cb - 4)) - cs / 8 - 1);
+}
+
 static int qcow2_make_empty(BlockDriverState *bs)
 {
+    BDRVQcowState *s = bs->opaque;
     int ret = 0;
-    uint64_t start_sector;
-    int sector_step = INT_MAX / BDRV_SECTOR_SIZE;
 
-    for (start_sector = 0; start_sector < bs->total_sectors;
-         start_sector += sector_step)
-    {
-        /* As this function is generally used after committing an external
-         * snapshot, QCOW2_DISCARD_SNAPSHOT seems appropriate. Also, the
-         * default action for this kind of discard is to pass the discard,
-         * which will ideally result in an actually smaller image file, as
-         * is probably desired. */
-        ret = qcow2_discard_clusters(bs, start_sector * BDRV_SECTOR_SIZE,
-                                     MIN(sector_step,
-                                         bs->total_sectors - start_sector),
-                                     QCOW2_DISCARD_SNAPSHOT, true);
-        if (ret < 0) {
-            break;
+    if (s->snapshots) {
+        uint64_t start_sector;
+        int sector_step = INT_MAX / BDRV_SECTOR_SIZE;
+
+        /* If there are snapshots, every active cluster has to be discarded */
+
+        for (start_sector = 0; start_sector < bs->total_sectors;
+             start_sector += sector_step)
+        {
+            /* As this function is generally used after committing an external
+             * snapshot, QCOW2_DISCARD_SNAPSHOT seems appropriate. Also, the
+             * default action for this kind of discard is to pass the discard,
+             * which will ideally result in an actually smaller image file, as
+             * is probably desired. */
+            ret = qcow2_discard_clusters(bs, start_sector * BDRV_SECTOR_SIZE,
+                                         MIN(sector_step,
+                                             bs->total_sectors - start_sector),
+                                         QCOW2_DISCARD_SNAPSHOT, true);
+            if (ret < 0) {
+                break;
+            }
         }
+    } else {
+        uint64_t min_size_1, min_size_2;
+        int64_t blob_start;
+        uint64_t blob_end, real_blob_size, clusters;
+        uint64_t refblocks, reftable_clusters, l2_tables, l1_clusters;
+
+        /* If there are no snapshots, we basically want to create a new empty
+         * image. This function is however not for creating a new image and
+         * renaming it so it shadows the existing but rather for emptying an
+         * image, so do exactly that.
+         *
+         * Therefore, the image should be valid at all points in time and may
+         * at worst leak clusters.
+         *
+         * Any valid qcow2 image requires an L1 table which is large enough to
+         * cover all of the guest cluster range, therefore it is impossible to
+         * simply drop the L1 table (make its size 0) and create a minimal
+         * refcount structure.
+         *
+         * Instead, allocate a blob of data which is large enough to hold a new
+         * refcount structure (refcount table and all blocks) covering the whole
+         * image until the end of that blob, and an empty L1 table covering the
+         * whole guest cluster range. Then these structures are initialized and
+         * the image header is modified to point to them.
+         *
+         * Generally, this blob will be allocated at the end of the image (that
+         * is, its offset will be greater than its size). If that is indeed the
+         * case, the same operation is repeated, but this time the new blob
+         * starts right after the image header which will then indeed lead to a
+         * minimal image. If this is not the case, the image will be nearly
+         * minimal as well, as long as the underlying protocol supports discard.
+         *
+         * Note that this implementation never frees allocated clusters. This is
+         * because in case of success, the current refcounts are invalid anyway;
+         * and in case of failure, it would be too cumbersome to keep track of
+         * all allocated cluster ranges and free them then.
+         *
+         * min_size_1 will contain the number of clusters minimally required for
+         * a blob that starts right after the image header; min_size_2 will
+         * contain the number of clusters minimally required for the blob which
+         * can be allocated based on the existing refcount structure.
+         */
+
+        /* Repeat until a blob could be allocated which is large enough to
+         * contain all structures necessary for describing itself. Allocated
+         * clusters are not freed, even if they are not suitable, as this would
+         * result in exactly the same cluster range being returned during the
+         * retry (which is obviously not desirable). In case of success, the
+         * current refcounts do not matter anyway; and in case of failure, the
+         * clusters are only leaked (which can be easily repaired). */
+        do {
+            uint64_t fci = s->free_cluster_index;
+
+            /* TODO: Optimize, we do not need refblocks for other parts of the
+             * image than the header and this blob */
+            min_size_2 = minimal_blob_size(bs->total_sectors, s->cluster_bits,
+                                           s->cluster_bits - BDRV_SECTOR_BITS,
+                                           fci);
+
+            blob_start = qcow2_alloc_clusters(bs,
+                                              min_size_2 << s->cluster_bits);
+            if (blob_start < 0) {
+                return blob_start;
+            }
+
+            clusters          = (blob_start >> s->cluster_bits) + min_size_2;
+            refblocks         = DIV_ROUND_UP(clusters, s->cluster_size / 2);
+            reftable_clusters = DIV_ROUND_UP(refblocks, s->cluster_size / 8);
+            l2_tables         = DIV_ROUND_UP(bs->total_sectors /
+                                             s->cluster_sectors,
+                                             s->cluster_size / 8);
+            l1_clusters       = DIV_ROUND_UP(l2_tables, s->cluster_size / 8);
+
+            real_blob_size = reftable_clusters + refblocks + l1_clusters;
+        } while (min_size_2 < real_blob_size);
+
+        ret = create_refcount_l1(bs, blob_start, refblocks);
+        if (ret < 0) {
+            return ret;
+        }
+
+        /* The only overhead is the image header */
+        min_size_1 = minimal_blob_size(bs->total_sectors, s->cluster_bits,
+                                       s->cluster_bits - BDRV_SECTOR_BITS, 1);
+
+        /* If we cannot create a new blob before the current one, just discard
+         * the sectors in between and return. Even if the discard does nothing,
+         * only up to min_size_1 clusters plus the refcount blocks for those
+         * are unused. The worst case is therefore an image of double the size
+         * it needs to be, which is not too bad. */
+        if ((blob_start >> s->cluster_bits) < 1 + min_size_1) {
+            uint64_t sector, end;
+            int step = INT_MAX / BDRV_SECTOR_SIZE;
+
+            end = blob_start >> (s->cluster_bits - BDRV_SECTOR_SIZE);
+
+            /* skip the image header */
+            for (sector = s->cluster_sectors; sector < end; sector += step) {
+                ret = bdrv_discard(bs->file, sector, MIN(step, end - sector));
+                if (ret < 0) {
+                    return ret;
+                }
+            }
+
+            blob_end = (blob_start + real_blob_size) << s->cluster_bits;
+        } else {
+            clusters          = 1 + min_size_1;
+            refblocks         = DIV_ROUND_UP(clusters, s->cluster_size / 2);
+            reftable_clusters = DIV_ROUND_UP(refblocks, s->cluster_size / 8);
+            l2_tables         = DIV_ROUND_UP(bs->total_sectors /
+                                             s->cluster_sectors,
+                                             s->cluster_size / 8);
+            l1_clusters       = DIV_ROUND_UP(l2_tables, s->cluster_size / 8);
+
+            real_blob_size = reftable_clusters + refblocks + l1_clusters;
+
+            assert(min_size_1 >= real_blob_size);
+
+            ret = create_refcount_l1(bs, s->cluster_size, refblocks);
+            if (ret < 0) {
+                return ret;
+            }
+
+            blob_end = (1 + real_blob_size) << s->cluster_bits;
+        }
+
+        ret = bdrv_truncate(bs->file, blob_end);
     }
 
     return ret;
