@@ -1174,10 +1174,10 @@ void memory_region_init_ram_may_fail(MemoryRegion *mr,
     mr->ram_addr = qemu_ram_alloc(size, mr, errp);
 }
 
-void memory_region_init_ram(MemoryRegion *mr,
-                            Object *owner,
-                            const char *name,
-                            uint64_t size)
+void memory_region_init_ram_nofail(MemoryRegion *mr,
+                                   Object *owner,
+                                   const char *name,
+                                   uint64_t size)
 {
     Error *local_err = NULL;
 
