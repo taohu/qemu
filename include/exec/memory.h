@@ -304,9 +304,8 @@ void memory_region_init_io(MemoryRegion *mr,
                            uint64_t size);
 
 /**
- * memory_region_init_ram_may_fail:  Initialize RAM memory region.  Accesses
- *                                   into the region will modify memory
- *                                   directly.
+ * memory_region_init_ram:  Initialize RAM memory region.  Accesses
+ *                          into the region will modify memory directly.
  *
  * @mr: the #MemoryRegion to be initialized.
  * @owner: the object that tracks the region's reference count
@@ -314,11 +313,11 @@ void memory_region_init_io(MemoryRegion *mr,
  * @size: size of the region.
  * @errp: pointer to Error*, to store an error if it happens.
  */
-void memory_region_init_ram_may_fail(MemoryRegion *mr,
-                                     struct Object *owner,
-                                     const char *name,
-                                     uint64_t size,
-                                     Error **errp);
+void memory_region_init_ram(MemoryRegion *mr,
+                            struct Object *owner,
+                            const char *name,
+                            uint64_t size,
+                            Error **errp);
 
 /**
  * memory_region_init_ram_nofail:  Initialize RAM memory region.  Accesses into
