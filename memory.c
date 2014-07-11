@@ -1161,11 +1161,11 @@ void memory_region_init_io(MemoryRegion *mr,
     mr->ram_addr = ~(ram_addr_t)0;
 }
 
-void memory_region_init_ram_may_fail(MemoryRegion *mr,
-                                     Object *owner,
-                                     const char *name,
-                                     uint64_t size,
-                                     Error **errp)
+void memory_region_init_ram(MemoryRegion *mr,
+                            Object *owner,
+                            const char *name,
+                            uint64_t size,
+                            Error **errp)
 {
     memory_region_init(mr, owner, name, size);
     mr->ram = true;
@@ -1181,7 +1181,7 @@ void memory_region_init_ram_nofail(MemoryRegion *mr,
 {
     Error *local_err = NULL;
 
-    memory_region_init_ram_may_fail(mr, owner, name, size, &local_err);
+    memory_region_init_ram(mr, owner, name, size, &local_err);
 
     if (local_err) {
         error_report("%s", error_get_pretty(local_err));
