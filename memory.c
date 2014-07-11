@@ -25,6 +25,7 @@
 #include "exec/memory-internal.h"
 #include "exec/ram_addr.h"
 #include "sysemu/sysemu.h"
+#include "qemu/error-report.h"
 
 //#define DEBUG_UNASSIGNED
 
@@ -1160,16 +1161,33 @@ void memory_region_init_io(MemoryRegion *mr,
     mr->ram_addr = ~(ram_addr_t)0;
 }
 
-void memory_region_init_ram(MemoryRegion *mr,
-                            Object *owner,
-                            const char *name,
-                            uint64_t size)
+void memory_region_init_ram_may_fail(MemoryRegion *mr,
+                                     Object *owner,
+                                     const char *name,
+                                     uint64_t size,
+                                     Error **errp)
 {
     memory_region_init(mr, owner, name, size);
     mr->ram = true;
     mr->terminates = true;
     mr->destructor = memory_region_destructor_ram;
-    mr->ram_addr = qemu_ram_alloc(size, mr);
+    mr->ram_addr = qemu_ram_alloc(size, mr, errp);
+}
+
+void memory_region_init_ram(MemoryRegion *mr,
+                            Object *owner,
+                            const char *name,
+                            uint64_t size)
+{
+    Error *local_err = NULL;
+
+    memory_region_init_ram_may_fail(mr, owner, name, size, &local_err);
+
+    if (local_err) {
+        error_report("%s", error_get_pretty(local_err));
+        error_free(local_err);
+        exit(EXIT_FAILURE);
+    }
 }
 
 #ifdef __linux__
@@ -1189,17 +1207,35 @@ void memory_region_init_ram_from_file(MemoryRegion *mr,
 }
 #endif
 
+void memory_region_init_ram_ptr_may_fail(MemoryRegion *mr,
+                                         Object *owner,
+                                         const char *name,
+                                         uint64_t size,
+                                         void *ptr,
+                                         Error **errp)
+{
+    memory_region_init(mr, owner, name, size);
+    mr->ram = true;
+    mr->terminates = true;
+    mr->destructor = memory_region_destructor_ram_from_ptr;
+    mr->ram_addr = qemu_ram_alloc_from_ptr(size, ptr, mr, errp);
+}
+
 void memory_region_init_ram_ptr(MemoryRegion *mr,
                                 Object *owner,
                                 const char *name,
                                 uint64_t size,
                                 void *ptr)
 {
-    memory_region_init(mr, owner, name, size);
-    mr->ram = true;
-    mr->terminates = true;
-    mr->destructor = memory_region_destructor_ram_from_ptr;
-    mr->ram_addr = qemu_ram_alloc_from_ptr(size, ptr, mr);
+    Error *local_err = NULL;
+
+    memory_region_init_ram_ptr_may_fail(mr, owner, name, size, ptr, &local_err);
+
+    if (local_err) {
+        error_report("%s", error_get_pretty(local_err));
+        error_free(local_err);
+        exit(EXIT_FAILURE);
+    }
 }
 
 void memory_region_init_alias(MemoryRegion *mr,
@@ -1221,7 +1257,8 @@ void memory_region_init_rom_device(MemoryRegion *mr,
                                    const MemoryRegionOps *ops,
                                    void *opaque,
                                    const char *name,
-                                   uint64_t size)
+                                   uint64_t size,
+                                   Error **errp)
 {
     memory_region_init(mr, owner, name, size);
     mr->ops = ops;
@@ -1229,7 +1266,7 @@ void memory_region_init_rom_device(MemoryRegion *mr,
     mr->terminates = true;
     mr->rom_device = true;
     mr->destructor = memory_region_destructor_rom_device;
-    mr->ram_addr = qemu_ram_alloc(size, mr);
+    mr->ram_addr = qemu_ram_alloc(size, mr, errp);
 }
 
 void memory_region_init_iommu(MemoryRegion *mr,

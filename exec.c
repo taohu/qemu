@@ -1224,7 +1224,7 @@ static int memory_try_enable_merging(void *addr, size_t len)
     return qemu_madvise(addr, len, QEMU_MADV_MERGEABLE);
 }
 
-static ram_addr_t ram_block_add(RAMBlock *new_block)
+static ram_addr_t ram_block_add(RAMBlock *new_block, Error **errp)
 {
     RAMBlock *block;
     ram_addr_t old_ram_size, new_ram_size;
@@ -1241,9 +1241,11 @@ static ram_addr_t ram_block_add(RAMBlock *new_block)
         } else {
             new_block->host = phys_mem_alloc(new_block->length);
             if (!new_block->host) {
-                fprintf(stderr, "Cannot set up guest memory '%s': %s\n",
-                        new_block->mr->name, strerror(errno));
-                exit(1);
+                error_setg_errno(errp, errno,
+                                 "cannot set up guest memory '%s'",
+                                 new_block->mr->name);
+                qemu_mutex_unlock_ramlist();
+                return -1;
             }
             memory_try_enable_merging(new_block->host, new_block->length);
         }
@@ -1294,6 +1296,7 @@ ram_addr_t qemu_ram_alloc_from_file(ram_addr_t size, MemoryRegion *mr,
                                     Error **errp)
 {
     RAMBlock *new_block;
+    ram_addr_t addr;
 
     if (xen_enabled()) {
         error_setg(errp, "-mem-path not supported with Xen");
@@ -1323,14 +1326,20 @@ ram_addr_t qemu_ram_alloc_from_file(ram_addr_t size, MemoryRegion *mr,
         return -1;
     }
 
-    return ram_block_add(new_block);
+    addr = ram_block_add(new_block, errp);
+    if (errp && *errp) {
+        g_free(new_block);
+        return -1;
+    }
+    return addr;
 }
 #endif
 
 ram_addr_t qemu_ram_alloc_from_ptr(ram_addr_t size, void *host,
-                                   MemoryRegion *mr)
+                                   MemoryRegion *mr, Error **errp)
 {
     RAMBlock *new_block;
+    ram_addr_t addr;
 
     size = TARGET_PAGE_ALIGN(size);
     new_block = g_malloc0(sizeof(*new_block));
@@ -1341,12 +1350,17 @@ ram_addr_t qemu_ram_alloc_from_ptr(ram_addr_t size, void *host,
     if (host) {
         new_block->flags |= RAM_PREALLOC;
     }
-    return ram_block_add(new_block);
+    addr = ram_block_add(new_block, errp);
+    if (errp && *errp) {
+        g_free(new_block);
+        return -1;
+    }
+    return addr;
 }
 
-ram_addr_t qemu_ram_alloc(ram_addr_t size, MemoryRegion *mr)
+ram_addr_t qemu_ram_alloc(ram_addr_t size, MemoryRegion *mr, Error **errp)
 {
-    return qemu_ram_alloc_from_ptr(size, NULL, mr);
+    return qemu_ram_alloc_from_ptr(size, NULL, mr, errp);
 }
 
 void qemu_ram_free_from_ptr(ram_addr_t addr)

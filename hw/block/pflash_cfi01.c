@@ -770,7 +770,10 @@ static void pflash_cfi01_realize(DeviceState *dev, Error **errp)
     memory_region_init_rom_device(
         &pfl->mem, OBJECT(dev),
         pfl->be ? &pflash_cfi01_ops_be : &pflash_cfi01_ops_le, pfl,
-        pfl->name, total_len);
+        pfl->name, total_len, errp);
+    if (errp && *errp) {
+        return;
+    }
     vmstate_register_ram(&pfl->mem, DEVICE(pfl));
     pfl->storage = memory_region_get_ram_ptr(&pfl->mem);
     sysbus_init_mmio(SYS_BUS_DEVICE(dev), &pfl->mem);
