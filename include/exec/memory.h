@@ -356,9 +356,9 @@ void memory_region_init_ram_from_file(MemoryRegion *mr,
 #endif
 
 /**
- * memory_region_init_ram_ptr_may_fail:  Initialize RAM memory region from a
- *                                       user-provided pointer.  Accesses into
- *                                       the region will modify memory directly.
+ * memory_region_init_ram_ptr:  Initialize RAM memory region from a
+ *                              user-provided pointer.  Accesses into
+ *                              the region will modify memory directly.
  *
  * @mr: the #MemoryRegion to be initialized.
  * @owner: the object that tracks the region's reference count
@@ -367,12 +367,12 @@ void memory_region_init_ram_from_file(MemoryRegion *mr,
  * @ptr: memory to be mapped; must contain at least @size bytes.
  * @errp: pointer to Error*, to store an error if it happens.
  */
-void memory_region_init_ram_ptr_may_fail(MemoryRegion *mr,
-                                         struct Object *owner,
-                                         const char *name,
-                                         uint64_t size,
-                                         void *ptr,
-                                         Error **errp);
+void memory_region_init_ram_ptr(MemoryRegion *mr,
+                                struct Object *owner,
+                                const char *name,
+                                uint64_t size,
+                                void *ptr,
+                                Error **errp);
 
 /**
  * memory_region_init_ram_ptr_nofail:  Initialize RAM memory region from a

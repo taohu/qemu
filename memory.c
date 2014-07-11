@@ -1207,12 +1207,12 @@ void memory_region_init_ram_from_file(MemoryRegion *mr,
 }
 #endif
 
-void memory_region_init_ram_ptr_may_fail(MemoryRegion *mr,
-                                         Object *owner,
-                                         const char *name,
-                                         uint64_t size,
-                                         void *ptr,
-                                         Error **errp)
+void memory_region_init_ram_ptr(MemoryRegion *mr,
+                                Object *owner,
+                                const char *name,
+                                uint64_t size,
+                                void *ptr,
+                                Error **errp)
 {
     memory_region_init(mr, owner, name, size);
     mr->ram = true;
@@ -1229,7 +1229,7 @@ void memory_region_init_ram_ptr_nofail(MemoryRegion *mr,
 {
     Error *local_err = NULL;
 
-    memory_region_init_ram_ptr_may_fail(mr, owner, name, size, ptr, &local_err);
+    memory_region_init_ram_ptr(mr, owner, name, size, ptr, &local_err);
 
     if (local_err) {
         error_report("%s", error_get_pretty(local_err));
