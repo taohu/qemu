@@ -375,9 +375,9 @@ void memory_region_init_ram_ptr_may_fail(MemoryRegion *mr,
                                          Error **errp);
 
 /**
- * memory_region_init_ram_ptr:  Initialize RAM memory region from a
- *                              user-provided pointer.  Accesses into the
- *                              region will modify memory directly.
+ * memory_region_init_ram_ptr_nofail:  Initialize RAM memory region from a
+ *                                     user-provided pointer.  Accesses into the
+ *                                     region will modify memory directly.
  *
  * @mr: the #MemoryRegion to be initialized.
  * @owner: the object that tracks the region's reference count
@@ -385,11 +385,11 @@ void memory_region_init_ram_ptr_may_fail(MemoryRegion *mr,
  * @size: size of the region.
  * @ptr: memory to be mapped; must contain at least @size bytes.
  */
-void memory_region_init_ram_ptr(MemoryRegion *mr,
-                                struct Object *owner,
-                                const char *name,
-                                uint64_t size,
-                                void *ptr);
+void memory_region_init_ram_ptr_nofail(MemoryRegion *mr,
+                                       struct Object *owner,
+                                       const char *name,
+                                       uint64_t size,
+                                       void *ptr);
 
 /**
  * memory_region_init_alias: Initialize a memory region that aliases all or a

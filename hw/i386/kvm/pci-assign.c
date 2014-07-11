@@ -454,7 +454,8 @@ static void assigned_dev_register_regions(PCIRegion *io_regions,
                 char name[32];
                 snprintf(name, sizeof(name), "%s.bar%d",
                          object_get_typename(OBJECT(pci_dev)), i);
-                memory_region_init_ram_ptr(&pci_dev->v_addrs[i].real_iomem,
+                memory_region_init_ram_ptr_nofail(
+                                           &pci_dev->v_addrs[i].real_iomem,
                                            OBJECT(pci_dev), name,
                                            cur_region->size, virtbase);
                 vmstate_register_ram(&pci_dev->v_addrs[i].real_iomem,

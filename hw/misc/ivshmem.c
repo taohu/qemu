@@ -347,8 +347,8 @@ static void create_shared_memory_BAR(IVShmemState *s, int fd) {
 
     ptr = mmap(0, s->ivshmem_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 
-    memory_region_init_ram_ptr(&s->ivshmem, OBJECT(s), "ivshmem.bar2",
-                               s->ivshmem_size, ptr);
+    memory_region_init_ram_ptr_nofail(&s->ivshmem, OBJECT(s), "ivshmem.bar2",
+                                      s->ivshmem_size, ptr);
     vmstate_register_ram(&s->ivshmem, DEVICE(s));
     memory_region_add_subregion(&s->bar, 0, &s->ivshmem);
 
@@ -475,8 +475,9 @@ static void ivshmem_read(void *opaque, const uint8_t * buf, int flags)
         /* mmap the region and map into the BAR2 */
         map_ptr = mmap(0, s->ivshmem_size, PROT_READ|PROT_WRITE, MAP_SHARED,
                                                             incoming_fd, 0);
-        memory_region_init_ram_ptr(&s->ivshmem, OBJECT(s),
-                                   "ivshmem.bar2", s->ivshmem_size, map_ptr);
+        memory_region_init_ram_ptr_nofail(&s->ivshmem, OBJECT(s),
+                                          "ivshmem.bar2", s->ivshmem_size,
+                                          map_ptr);
         vmstate_register_ram(&s->ivshmem, DEVICE(s));
 
         IVSHMEM_DPRINTF("guest h/w addr = %" PRIu64 ", size = %" PRIu64 "\n",

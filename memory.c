@@ -1221,11 +1221,11 @@ void memory_region_init_ram_ptr_may_fail(MemoryRegion *mr,
     mr->ram_addr = qemu_ram_alloc_from_ptr(size, ptr, mr, errp);
 }
 
-void memory_region_init_ram_ptr(MemoryRegion *mr,
-                                Object *owner,
-                                const char *name,
-                                uint64_t size,
-                                void *ptr)
+void memory_region_init_ram_ptr_nofail(MemoryRegion *mr,
+                                       Object *owner,
+                                       const char *name,
+                                       uint64_t size,
+                                       void *ptr)
 {
     Error *local_err = NULL;
 
