@@ -788,7 +788,7 @@ static int onenand_initfn(SysBusDevice *sbd)
     }
     s->otp = memset(g_malloc((64 + 2) << PAGE_SHIFT),
                     0xff, (64 + 2) << PAGE_SHIFT);
-    memory_region_init_ram(&s->ram, OBJECT(s), "onenand.ram",
+    memory_region_init_ram_nofail(&s->ram, OBJECT(s), "onenand.ram",
                            0xc000 << s->shift);
     vmstate_register_ram_global(&s->ram);
     ram = memory_region_get_ram_ptr(&s->ram);

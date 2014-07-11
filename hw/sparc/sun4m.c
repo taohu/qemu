@@ -620,7 +620,7 @@ static int idreg_init1(SysBusDevice *dev)
 {
     IDRegState *s = MACIO_ID_REGISTER(dev);
 
-    memory_region_init_ram(&s->mem, OBJECT(s),
+    memory_region_init_ram_nofail(&s->mem, OBJECT(s),
                            "sun4m.idreg", sizeof(idreg_data));
     vmstate_register_ram_global(&s->mem);
     memory_region_set_readonly(&s->mem, true);
@@ -668,7 +668,7 @@ static int afx_init1(SysBusDevice *dev)
 {
     AFXState *s = TCX_AFX(dev);
 
-    memory_region_init_ram(&s->mem, OBJECT(s), "sun4m.afx", 4);
+    memory_region_init_ram_nofail(&s->mem, OBJECT(s), "sun4m.afx", 4);
     vmstate_register_ram_global(&s->mem);
     sysbus_init_mmio(dev, &s->mem);
     return 0;
@@ -742,7 +742,8 @@ static int prom_init1(SysBusDevice *dev)
 {
     PROMState *s = OPENPROM(dev);
 
-    memory_region_init_ram(&s->prom, OBJECT(s), "sun4m.prom", PROM_SIZE_MAX);
+    memory_region_init_ram_nofail(&s->prom, OBJECT(s), "sun4m.prom",
+                                  PROM_SIZE_MAX);
     vmstate_register_ram_global(&s->prom);
     memory_region_set_readonly(&s->prom, true);
     sysbus_init_mmio(dev, &s->prom);
@@ -784,7 +785,7 @@ static int ram_init1(SysBusDevice *dev)
 {
     RamDevice *d = SUN4M_RAM(dev);
 
-    memory_region_init_ram(&d->ram, OBJECT(d), "sun4m.ram", d->size);
+    memory_region_init_ram_nofail(&d->ram, OBJECT(d), "sun4m.ram", d->size);
     vmstate_register_ram_global(&d->ram);
     sysbus_init_mmio(dev, &d->ram);
     return 0;

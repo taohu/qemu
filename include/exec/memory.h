@@ -321,18 +321,18 @@ void memory_region_init_ram_may_fail(MemoryRegion *mr,
                                      Error **errp);
 
 /**
- * memory_region_init_ram:  Initialize RAM memory region.  Accesses into the
- *                          region will modify memory directly.
+ * memory_region_init_ram_nofail:  Initialize RAM memory region.  Accesses into
+ *                                 the region will modify memory directly.
  *
  * @mr: the #MemoryRegion to be initialized.
  * @owner: the object that tracks the region's reference count
  * @name: the name of the region.
  * @size: size of the region.
  */
-void memory_region_init_ram(MemoryRegion *mr,
-                            struct Object *owner,
-                            const char *name,
-                            uint64_t size);
+void memory_region_init_ram_nofail(MemoryRegion *mr,
+                                   struct Object *owner,
+                                   const char *name,
+                                   uint64_t size);
 
 #ifdef __linux__
 /**
